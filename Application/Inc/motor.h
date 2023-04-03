@@ -10,15 +10,15 @@
 
 #include "main.h"
 
-#define MOTOR_MAX_PWM_VALUE 4999.0f
-
 typedef struct
 {
     float input1, input2, input3, input4;
     float input5, input6, input7, input8;
-} MotorControl;
+} MotorInput;
 
-void DriveMotor(MotorControl *motor);
-void BrakeMotor(MotorControl *motor);
+void DriveMotor(Motor *motor1, Motor *motor2, Motor *motor3, Motor *motor4,
+                Motor *motor5, Motor *motor6, Motor *motor7, Motor *motor8, MotorInput *motor_input);
+void BrakeMotor(Motor *motor1, Motor *motor2, Motor *motor3, Motor *motor4,
+                Motor *motor5, Motor *motor6, Motor *motor7, Motor *motor8);
 
 #endif /* __MOTOR_H_ */

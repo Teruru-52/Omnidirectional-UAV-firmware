@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
 #include "adc.h"
 #include "spi.h"
 #include "tim.h"
@@ -27,7 +26,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "mpu9250.h"
+#include "lps25hb.h"
+#include "speaker.h"
+#include "ahrs.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,15 +54,65 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-extern osSemaphoreId Control_SemaphoreHandle;
-extern osSemaphoreId AHRS_SemaphoreHandle;
+// extern osSemaphoreId Control_SemaphoreHandle;
+// extern osSemaphoreId AHRS_SemaphoreHandle;
+int count = 0;
+float bat_vol;
+float pressure;
+AxesRaw acc, gyro, mag;
+AHRS_State ahrs;
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+  /* USER CODE END Callback 0 */
+  /* USER CODE BEGIN Callback 1 */
+  if (htim->Instance == TIM1) // 1kHz interruption
+  {
+    // osSemaphoreRelease(Control_SemaphoreHandle);
+  }
+
+  if (htim->Instance == TIM12) // 100Hz interruption
+  {
+    // osSemaphoreRelease(AHRS_SemaphoreHandle);
+    ReadSensor(&acc, &gyro, &mag);
+    // ReadPressure(&pressure);
+    // UpdateMadgwickFilter(&acc, &gyro, &mag, &ahrs);
+    UpdateMadgwickFilterIMU(&acc, &gyro, &ahrs);
+    // UpdateEKF(&acc, &gyro, &mag, &ahrs);
+    count = (count + 1) % 100;
+
+    if (count == 99)
+    {
+      Write_GPIO(USER_LED4, 1);
+    }
+    else
+    {
+      Write_GPIO(USER_LED4, 0);
+    }
+
+    if (count % 20 == 0)
+    {
+      // float roll = atan2(2.0f * (ahrs.q.q0 * ahrs.q.q1 + ahrs.q.q2 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 - ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 + ahrs.q.q3 * ahrs.q.q3);
+      // float pitch = asin(2.0f * (ahrs.q.q0 * ahrs.q.q2 - ahrs.q.q1 * ahrs.q.q3));
+      // float yaw = atan2(2.0f * (ahrs.q.q1 * ahrs.q.q2 + ahrs.q.q0 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 + ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 - ahrs.q.q3 * ahrs.q.q3);
+
+      // printf("%f, %f, %f\n", acc.x, acc.y, acc.z);
+      printf("%f, %f, %f\n", gyro.x, gyro.y, gyro.z);
+      // printf("%3f, %3f, %3f\n", mag.x, mag.y, mag.z);
+      // printf("%3f\t%3f\t%3f\t%3f\t\r\n", ahrs.q.q0, ahrs.q.q1, ahrs.q.q2, ahrs.q.q3);
+      // printf("%3f\t%3f\t%3f\t\r\n", roll, pitch, yaw);
+      // printf("pressure = %f\n", pressure);
+    }
+  }
+  /* USER CODE END Callback 1 */
+}
 /* USER CODE END 0 */
 
 /**
@@ -102,8 +154,8 @@ int main(void)
   MX_TIM9_Init();
   MX_USART1_UART_Init();
   MX_SPI3_Init();
+  MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
@@ -121,14 +173,28 @@ int main(void)
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim9, TIM_CHANNEL_1);
+
+  Write_GPIO(USER_LED2, 1);
+  ReadBatteryVoltage(&bat_vol);
+  printf("battery = %f\n", bat_vol);
+  InitializeIMU();
+  Initialize_LPS25HB();
+  CalcAccOffset(&acc);
+  CalcGyroOffset(&gyro);
+  InitializeAHRS(&ahrs);
+  Beep();
+  Write_GPIO(USER_LED2, 0);
+
+  Motor_TIM_Init();
+
+  Write_GPIO(USER_LED1, 1);
+  Write_GPIO(USER_LED3, 1);
+  Write_GPIO(USER_LED4, 1);
+
+  int duty = 200;
+
   /* USER CODE END 2 */
 
-  /* Call init function for freertos objects (in freertos.c) */
-  MX_FREERTOS_Init();
-  /* Start scheduler */
-  osKernelStart();
-
-  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -136,6 +202,65 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if (Read_GPIO(USER_SW) == 1)
+    {
+      Write_GPIO(USER_LED3, 0);
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+    }
+    else
+    {
+      Write_GPIO(USER_LED3, 1);
+      // HAL_Delay(3000);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      // HAL_Delay(2000);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
+      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
+      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
+      // HAL_Delay(2000);
+    }
   }
   /* USER CODE END 3 */
 }
@@ -182,7 +307,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV4;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
@@ -193,32 +318,6 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
-
-/**
- * @brief  Period elapsed callback in non blocking mode
- * @note   This function is called  when TIM6 interrupt took place, inside
- * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
- * a global variable "uwTick" used as application time base.
- * @param  htim : TIM handle
- * @retval None
- */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
-
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM6)
-  {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
-  if (htim->Instance == TIM1)
-  {
-    osSemaphoreRelease(AHRS_SemaphoreHandle);
-    osSemaphoreRelease(Control_SemaphoreHandle);
-  }
-  /* USER CODE END Callback 1 */
-}
 
 /**
  * @brief  This function is executed in case of error occurrence.

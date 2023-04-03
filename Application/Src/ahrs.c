@@ -9,14 +9,14 @@
 
 float dt;
 float half_dt;
-float ga;
-float mn;
-float md;
-float double_ga;
-float double_mn;
-float double_md;
+float beta;
+float zeta;
+float _2g;
+float _2mn;
+float _2me;
+float _2md;
 
-void InitializeEKF(AHRS_State *ahrs)
+void InitializeAHRS(AHRS_State *ahrs)
 {
     ahrs->q.q0 = 1.0f;
     ahrs->q.q1 = 0.0f;
@@ -26,14 +26,14 @@ void InitializeEKF(AHRS_State *ahrs)
     ahrs->gy_offset = 0.0f;
     ahrs->gz_offset = 0.0f;
 
-    dt = 0.001f;
+    dt = 0.01f;
     half_dt = dt * 0.5f;
-    ga = 9.81f;
-    // mn = 0.0f;
-    // md = 0.0f;
-    double_ga = 2.0f * ga;
-    double_mn = 2.0f * mn;
-    double_md = 2.0f * md;
+    beta = 0.1f;
+    zeta = 0.004f;
+    _2g = 2.0f * g;
+    _2mn = 2.0f * mn;
+    _2me = 2.0f * me;
+    _2md = 2.0f * md;
 
     float coeff_transA[49];
     float coeff_C[42];
@@ -48,9 +48,9 @@ void InitializeEKF(AHRS_State *ahrs)
     float coeff_gm[6];
     coeff_gm[0] = 0.0f;
     coeff_gm[1] = 0.0f;
-    coeff_gm[2] = -ga;
+    coeff_gm[2] = -g;
     coeff_gm[3] = mn;
-    coeff_gm[4] = 0.0f;
+    coeff_gm[4] = me;
     coeff_gm[5] = md;
 
     float coeff_V[49] = {
@@ -117,6 +117,173 @@ void InitializeEKF(AHRS_State *ahrs)
     arm_mat_init_f32(&mat_GtransCbarP, 7, 7, coeff_GtransCbarP);
 }
 
+void UpdateMadgwickFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
+{
+    float recipNorm;
+    float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f, s3 = 0.0f;
+    Quaternion dq;
+    float hx, hy;
+
+    // Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
+    if ((mag->x == 0.0f) && (mag->y == 0.0f) && (mag->z == 0.0f))
+    {
+        UpdateMadgwickFilterIMU(acc, gyro, ahrs);
+        return;
+    }
+
+    // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+    if (!((acc->x == 0.0f) && (acc->y == 0.0f) && (acc->z == 0.0f)))
+    {
+
+        // Normalise accelerometer measurement
+        recipNorm = invSqrt(acc->x * acc->x + acc->y * acc->y + acc->z * acc->z);
+        acc->x *= recipNorm;
+        acc->y *= recipNorm;
+        acc->z *= recipNorm;
+
+        // Normalise magnetometer measurement
+        recipNorm = invSqrt(mag->x * mag->x + mag->y * mag->y + mag->z * mag->z);
+        mag->x *= recipNorm;
+        mag->y *= recipNorm;
+        mag->z *= recipNorm;
+
+        // Auxiliary variables to avoid repeated arithmetic
+        float _2q0mx = 2.0f * ahrs->q.q0 * mag->x;
+        float _2q0my = 2.0f * ahrs->q.q0 * mag->y;
+        float _2q0mz = 2.0f * ahrs->q.q0 * mag->z;
+        float _2q1mx = 2.0f * ahrs->q.q1 * mag->x;
+        float _2q0 = 2.0f * ahrs->q.q0;
+        float _2q1 = 2.0f * ahrs->q.q1;
+        float _2q2 = 2.0f * ahrs->q.q2;
+        float _2q3 = 2.0f * ahrs->q.q3;
+        float _2q0q2 = 2.0f * ahrs->q.q0 * ahrs->q.q2;
+        float _2q2q3 = 2.0f * ahrs->q.q2 * ahrs->q.q3;
+        float q0q0 = ahrs->q.q0 * ahrs->q.q0;
+        float q0q1 = ahrs->q.q0 * ahrs->q.q1;
+        float q0q2 = ahrs->q.q0 * ahrs->q.q2;
+        float q0q3 = ahrs->q.q0 * ahrs->q.q3;
+        float q1q1 = ahrs->q.q1 * ahrs->q.q1;
+        float q1q2 = ahrs->q.q1 * ahrs->q.q2;
+        float q1q3 = ahrs->q.q1 * ahrs->q.q3;
+        float q2q2 = ahrs->q.q2 * ahrs->q.q2;
+        float q2q3 = ahrs->q.q2 * ahrs->q.q3;
+        float q3q3 = ahrs->q.q3 * ahrs->q.q3;
+
+        // Reference direction of Earth's magnetic field
+        hx = mag->x * q0q0 - _2q0my * ahrs->q.q3 + _2q0mz * ahrs->q.q2 + mag->x * q1q1 + _2q1 * mag->y * ahrs->q.q2 + _2q1 * mag->z * ahrs->q.q3 - mag->x * q2q2 - mag->x * q3q3;
+        hy = _2q0mx * ahrs->q.q3 + mag->y * q0q0 - _2q0mz * ahrs->q.q1 + _2q1mx * ahrs->q.q2 - mag->y * q1q1 + mag->y * q2q2 + _2q2 * mag->z * ahrs->q.q3 - mag->y * q3q3;
+        float _2bx = Sqrt(hx * hx + hy * hy);
+        float _2bz = -_2q0mx * ahrs->q.q2 + _2q0my * ahrs->q.q1 + mag->z * q0q0 + _2q1mx * ahrs->q.q3 - mag->z * q1q1 + _2q2 * mag->y * ahrs->q.q3 - mag->z * q2q2 + mag->z * q3q3;
+        float _4bx = 2.0f * _2bx;
+        float _4bz = 2.0f * _2bz;
+
+        // Gradient decent algorithm corrective step
+        s0 = -_2q2 * (2.0f * q1q3 - _2q0q2 - acc->x) + _2q1 * (2.0f * q0q1 + _2q2q3 - acc->y) - _2bz * ahrs->q.q2 * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mag->x) + (-_2bx * ahrs->q.q3 + _2bz * ahrs->q.q1) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - mag->y) + _2bx * ahrs->q.q2 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mag->z);
+        s1 = _2q3 * (2.0f * q1q3 - _2q0q2 - acc->x) + _2q0 * (2.0f * q0q1 + _2q2q3 - acc->y) - 4.0f * ahrs->q.q1 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - acc->z) + _2bz * ahrs->q.q3 * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mag->x) + (_2bx * ahrs->q.q2 + _2bz * ahrs->q.q0) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - mag->y) + (_2bx * ahrs->q.q3 - _4bz * ahrs->q.q1) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mag->z);
+        s2 = -_2q0 * (2.0f * q1q3 - _2q0q2 - acc->x) + _2q3 * (2.0f * q0q1 + _2q2q3 - acc->y) - 4.0f * ahrs->q.q2 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - acc->z) + (-_4bx * ahrs->q.q2 - _2bz * ahrs->q.q0) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mag->x) + (_2bx * ahrs->q.q1 + _2bz * ahrs->q.q3) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - mag->y) + (_2bx * ahrs->q.q0 - _4bz * ahrs->q.q2) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mag->z);
+        s3 = _2q1 * (2.0f * q1q3 - _2q0q2 - acc->x) + _2q2 * (2.0f * q0q1 + _2q2q3 - acc->y) + (-_4bx * ahrs->q.q3 + _2bz * ahrs->q.q1) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mag->x) + (-_2bx * ahrs->q.q0 + _2bz * ahrs->q.q2) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - mag->y) + _2bx * ahrs->q.q1 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mag->z);
+        recipNorm = invSqrt(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3); // normalise step magnitude
+        s0 *= recipNorm;
+        s1 *= recipNorm;
+        s2 *= recipNorm;
+        s3 *= recipNorm;
+    }
+
+    ahrs->gx = gyro->x;
+    ahrs->gy = gyro->y;
+    ahrs->gz = gyro->z;
+
+    // compute and remove the gyroscope baises
+    ahrs->gx_offset += 2.0f * (ahrs->q.q0 * s1 - ahrs->q.q1 * s0 - ahrs->q.q2 * s3 + ahrs->q.q3 * s2) * dt;
+    ahrs->gy_offset += 2.0f * (ahrs->q.q0 * s2 + ahrs->q.q1 * s3 - ahrs->q.q2 * s0 - ahrs->q.q3 * s1) * dt;
+    ahrs->gz_offset += 2.0f * (ahrs->q.q0 * s3 - ahrs->q.q1 * s2 + ahrs->q.q2 * s1 - ahrs->q.q3 * s0) * dt;
+
+    ahrs->gx -= zeta * ahrs->gx_offset;
+    ahrs->gy -= zeta * ahrs->gy_offset;
+    ahrs->gz -= zeta * ahrs->gz_offset;
+
+    // Rate of change of quaternion from gyroscope
+    dq.q0 = 0.5f * (-ahrs->q.q1 * ahrs->gx - ahrs->q.q2 * ahrs->gy - ahrs->q.q3 * ahrs->gz);
+    dq.q1 = 0.5f * (ahrs->q.q0 * ahrs->gx + ahrs->q.q2 * ahrs->gz - ahrs->q.q3 * ahrs->gy);
+    dq.q2 = 0.5f * (ahrs->q.q0 * ahrs->gy - ahrs->q.q1 * ahrs->gz + ahrs->q.q3 * ahrs->gx);
+    dq.q3 = 0.5f * (ahrs->q.q0 * ahrs->gz + ahrs->q.q1 * ahrs->gy - ahrs->q.q2 * ahrs->gx);
+
+    // Apply feedback step
+    dq.q0 -= beta * s0;
+    dq.q1 -= beta * s1;
+    dq.q2 -= beta * s2;
+    dq.q3 -= beta * s3;
+
+    // Integrate rate of change of quaternion to yield quaternion
+    ahrs->q.q0 += dq.q0 * dt;
+    ahrs->q.q1 += dq.q1 * dt;
+    ahrs->q.q2 += dq.q2 * dt;
+    ahrs->q.q3 += dq.q3 * dt;
+    QuaternionNorm(&(ahrs->q));
+}
+
+void UpdateMadgwickFilterIMU(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs)
+{
+    float recipNorm;
+    float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f, s3 = 0.0f;
+    Quaternion dq;
+
+    // Rate of change of quaternion from gyroscope
+    dq.q0 = 0.5f * (-ahrs->q.q1 * gyro->x - ahrs->q.q2 * gyro->y - ahrs->q.q3 * gyro->z);
+    dq.q1 = 0.5f * (ahrs->q.q0 * gyro->x + ahrs->q.q2 * gyro->z - ahrs->q.q3 * gyro->y);
+    dq.q2 = 0.5f * (ahrs->q.q0 * gyro->y - ahrs->q.q1 * gyro->z + ahrs->q.q3 * gyro->x);
+    dq.q3 = 0.5f * (ahrs->q.q0 * gyro->z + ahrs->q.q1 * gyro->y - ahrs->q.q2 * gyro->x);
+
+    // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+    if (!((acc->x == 0.0f) && (acc->y == 0.0f) && (acc->z == 0.0f)))
+    {
+        // Normalise accelerometer measurement
+        recipNorm = invSqrt(acc->x * acc->x + acc->y * acc->y + acc->z * acc->z);
+        acc->x *= recipNorm;
+        acc->y *= recipNorm;
+        acc->z *= recipNorm;
+
+        // Auxiliary variables to avoid repeated arithmetic
+        float _2q0 = 2.0f * ahrs->q.q0;
+        float _2q1 = 2.0f * ahrs->q.q1;
+        float _2q2 = 2.0f * ahrs->q.q2;
+        float _2q3 = 2.0f * ahrs->q.q3;
+        float _4q0 = 4.0f * ahrs->q.q0;
+        float _4q1 = 4.0f * ahrs->q.q1;
+        float _4q2 = 4.0f * ahrs->q.q2;
+        float _8q1 = 8.0f * ahrs->q.q1;
+        float _8q2 = 8.0f * ahrs->q.q2;
+        float q0q0 = ahrs->q.q0 * ahrs->q.q0;
+        float q1q1 = ahrs->q.q1 * ahrs->q.q1;
+        float q2q2 = ahrs->q.q2 * ahrs->q.q2;
+        float q3q3 = ahrs->q.q3 * ahrs->q.q3;
+
+        // Gradient decent algorithm corrective step
+        s0 = _4q0 * q2q2 + _2q2 * acc->x + _4q0 * q1q1 - _2q1 * acc->y;
+        s1 = _4q1 * q3q3 - _2q3 * acc->x + 4.0f * q0q0 * ahrs->q.q1 - _2q0 * acc->y - _4q1 + _8q1 * q1q1 + _8q1 * q2q2 + _4q1 * acc->z;
+        s2 = 4.0f * q0q0 * ahrs->q.q2 + _2q0 * acc->x + _4q2 * q3q3 - _2q3 * acc->y - _4q2 + _8q2 * q1q1 + _8q2 * q2q2 + _4q2 * acc->z;
+        s3 = 4.0f * q1q1 * ahrs->q.q3 - _2q1 * acc->x + 4.0f * q2q2 * ahrs->q.q3 - _2q2 * acc->y;
+        recipNorm = invSqrt(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3); // normalise step magnitude
+        s0 *= recipNorm;
+        s1 *= recipNorm;
+        s2 *= recipNorm;
+        s3 *= recipNorm;
+
+        // Apply feedback step
+        dq.q0 -= beta * s0;
+        dq.q1 -= beta * s1;
+        dq.q2 -= beta * s2;
+        dq.q3 -= beta * s3;
+    }
+
+    // Integrate rate of change of quaternion to yield quaternion
+    ahrs->q.q0 += dq.q0 * dt;
+    ahrs->q.q1 += dq.q1 * dt;
+    ahrs->q.q2 += dq.q2 * dt;
+    ahrs->q.q3 += dq.q3 * dt;
+    QuaternionNorm(&(ahrs->q));
+}
+
 void UpdateEKF(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
 {
     float coeff_q0 = ahrs->q.q0 * half_dt;
@@ -161,26 +328,30 @@ void UpdateEKF(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
     arm_mat_trans_f32(&mat_A, &mat_transA);
 
     // auxiliary variables to reduce number of repeated operations
-    float coeff_gaq0 = double_ga * ahrs->q.q0;
-    float coeff_gaq1 = double_ga * ahrs->q.q1;
-    float coeff_gaq2 = double_ga * ahrs->q.q2;
-    float coeff_gaq3 = double_ga * ahrs->q.q3;
-    float coeff_mnq0 = double_mn * ahrs->q.q0;
-    float coeff_mnq1 = double_mn * ahrs->q.q1;
-    float coeff_mnq2 = double_mn * ahrs->q.q2;
-    float coeff_mnq3 = double_mn * ahrs->q.q3;
-    float coeff_mdq0 = double_md * ahrs->q.q0;
-    float coeff_mdq1 = double_md * ahrs->q.q1;
-    float coeff_mdq2 = double_md * ahrs->q.q2;
-    float coeff_mdq3 = double_md * ahrs->q.q3;
+    float _2gq0 = _2g * ahrs->q.q0;
+    float _2gq1 = _2g * ahrs->q.q1;
+    float _2gq2 = _2g * ahrs->q.q2;
+    float _2gq3 = _2g * ahrs->q.q3;
+    float _2mnq0 = _2mn * ahrs->q.q0;
+    float _2mnq1 = _2mn * ahrs->q.q1;
+    float _2mnq2 = _2mn * ahrs->q.q2;
+    float _2mnq3 = _2mn * ahrs->q.q3;
+    float _2meq0 = _2me * ahrs->q.q0;
+    float _2meq1 = _2me * ahrs->q.q1;
+    float _2meq2 = _2me * ahrs->q.q2;
+    float _2meq3 = _2me * ahrs->q.q3;
+    float _2mdq0 = _2md * ahrs->q.q0;
+    float _2mdq1 = _2md * ahrs->q.q1;
+    float _2mdq2 = _2md * ahrs->q.q2;
+    float _2mdq3 = _2md * ahrs->q.q3;
 
     float coeff_transC[42] = {
-        coeff_gaq2, -coeff_gaq3, coeff_gaq0, -coeff_gaq1, 0.0f, 0.0f, 0.0f,
-        -coeff_gaq1, -coeff_gaq0, -coeff_gaq3, -coeff_gaq2, 0.0f, 0.0f, 0.0f,
-        -coeff_gaq0, coeff_gaq1, coeff_gaq2, -coeff_gaq3, 0.0f, 0.0f, 0.0f,
-        coeff_mnq0 - coeff_mdq2, coeff_mnq1 + coeff_mdq3, -coeff_mnq2 - coeff_mdq0, -coeff_mnq3 + coeff_mdq1, 0.0f, 0.0f, 0.0f,
-        -coeff_mnq3 + coeff_mdq1, coeff_mnq2 + coeff_mdq0, coeff_mnq1 + coeff_mdq3, -coeff_mnq0 + coeff_mdq2, 0.0f, 0.0f, 0.0f,
-        coeff_mnq2 + coeff_mdq0, coeff_mnq3 - coeff_mdq1, coeff_mnq0 - coeff_mdq2, coeff_mnq1 + coeff_mdq3, 0.0f, 0.0f, 0.0f};
+        _2gq2, -_2gq3, _2gq0, -_2gq1, 0.0f, 0.0f, 0.0f,
+        -_2gq1, -_2gq0, -_2gq3, -_2gq2, 0.0f, 0.0f, 0.0f,
+        -_2gq0, _2gq1, _2gq2, -_2gq3, 0.0f, 0.0f, 0.0f,
+        (_2mnq0 + _2meq3 - _2mdq2), (_2mnq1 + _2meq2 + _2mdq3), (-_2mnq2 + _2meq1 - _2mdq0), (-_2mnq3 + _2meq0 + _2mdq1), 0.0f, 0.0f, 0.0f,
+        (-_2mnq3 + _2meq0 + _2mdq1), (_2mnq2 - _2meq1 + _2mdq0), (_2mnq1 + _2meq2 + _2mdq3), (-_2mnq0 - _2meq3 + _2mdq2), 0.0f, 0.0f, 0.0f,
+        (_2mnq2 - _2meq1 + _2mdq0), (_2mnq3 - _2meq0 - _2mdq1), (_2mnq0 + _2meq3 - _2mdq2), (_2mnq1 + _2meq2 + _2mdq3), 0.0f, 0.0f, 0.0f};
     arm_mat_init_f32(&mat_transC, 6, 7, coeff_transC);
     arm_mat_trans_f32(&mat_transC, &mat_C);
 
@@ -236,4 +407,11 @@ void UpdateEKF(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
     arm_mat_mult_f32(&mat_G, &mat_transC, &mat_GtransC);
     arm_mat_mult_f32(&mat_GtransC, &mat_barP, &mat_GtransCbarP);
     arm_mat_sub_f32(&mat_barP, &mat_GtransCbarP, &mat_P);
+
+    ahrs->gx_offset = coeff_estX[4];
+    ahrs->gy_offset = coeff_estX[5];
+    ahrs->gz_offset = coeff_estX[6];
+    ahrs->gx = gyro->x - ahrs->gx_offset;
+    ahrs->gy = gyro->y - ahrs->gy_offset;
+    ahrs->gz = gyro->z - ahrs->gz_offset;
 }

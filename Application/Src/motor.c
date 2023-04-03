@@ -7,41 +7,33 @@
 
 #include "motor.h"
 
-void DriveMotor(MotorControl *motor)
+void DriveMotor(Motor *motor1, Motor *motor2, Motor *motor3, Motor *motor4,
+                Motor *motor5, Motor *motor6, Motor *motor7, Motor *motor8, MotorInput *motor_input)
 {
-    if (motor->input1 > MOTOR_MAX_PWM_VALUE)
-            motor->input1 = MOTOR_MAX_PWM_VALUE;
-        else if (motor->input1 < -MOTOR_MAX_PWM_VALUE)
-            motor->input1 = -MOTOR_MAX_PWM_VALUE;
+    if (motor_input->input1 > MOTOR_MAX_PWM_VALUE)
+        motor_input->input1 = MOTOR_MAX_PWM_VALUE;
+    else if (motor_input->input1 < -MOTOR_MAX_PWM_VALUE)
+        motor_input->input1 = -MOTOR_MAX_PWM_VALUE;
 
-        if (motor->input1 > 0)
-        {
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - motor->input1);
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-        }
-        else
-        {
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE + motor->input1);
-        }
+    PWM_Update(motor1, motor_input->input1);
+    PWM_Update(motor2, motor_input->input2);
+    PWM_Update(motor3, motor_input->input3);
+    PWM_Update(motor4, motor_input->input4);
+    PWM_Update(motor5, motor_input->input5);
+    PWM_Update(motor6, motor_input->input6);
+    PWM_Update(motor7, motor_input->input7);
+    PWM_Update(motor8, motor_input->input8);
 }
 
-void BrakeMotor(MotorControl *motor)
+void BrakeMotor(Motor *motor1, Motor *motor2, Motor *motor3, Motor *motor4,
+                Motor *motor5, Motor *motor6, Motor *motor7, Motor *motor8)
 {
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+    PWM_Stop(motor1);
+    PWM_Stop(motor2);
+    PWM_Stop(motor3);
+    PWM_Stop(motor4);
+    PWM_Stop(motor5);
+    PWM_Stop(motor6);
+    PWM_Stop(motor7);
+    PWM_Stop(motor8);
 }

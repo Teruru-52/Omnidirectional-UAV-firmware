@@ -52,7 +52,9 @@ arm_matrix_instance_f32 mat_transC;
 arm_matrix_instance_f32 mat_Y;
 arm_matrix_instance_f32 mat_invR; // invR = transR
 
-void InitializeEKF(AHRS_State *ahrs);
+void InitializeAHRS(AHRS_State *ahrs);
+void UpdateMadgwickFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
+void UpdateMadgwickFilterIMU(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs);
 void UpdateEKF(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
 
 #endif /* __AHRS_H_ */
