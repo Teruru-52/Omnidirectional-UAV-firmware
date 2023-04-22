@@ -37,11 +37,11 @@ void drawGraph() {
   //camera(0, 1000, 1000, 0, 0, 0, 0, 1, 0);
   translate(width / 2, height / 2, 0);
   //translate(200, 180);
-  
+
   q0 = float(string_q0);
-  q1 = float(string_q1);
+  q1 = -float(string_q1);
   q2 = float(string_q2);
-  q3 = float(string_q3);
+  q3 = -float(string_q3);
   
   stroke(0);
   fill(0);
