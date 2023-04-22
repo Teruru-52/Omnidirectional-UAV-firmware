@@ -7,15 +7,14 @@
 
 #include "mpu9250.h"
 
-const float g = 9.81f;
+float bx = 0;
+float by = 0;
+float bz = 0;
 
-float mn = 0;
-float me = 0;
-float md = 0;
-
-float ax_offset = 0, ay_offset = 0, az_offset = 0;
+float ax_offset = -0.001176f, ay_offset = -0.001515f, az_offset = -0.045435f;
 float gx_offset = 0, gy_offset = 0, gz_offset = 0;
-float mx_offset = -1264.0f, my_offset = 26.9188f, mz_offset = -573.6822f;
+// at my apartment
+float mx_offset = -1274.5f, my_offset = 27.4787f, mz_offset = 600.4536f;
 
 uint8_t buffer[21];
 uint8_t asa[3];
@@ -206,7 +205,9 @@ void CalcAccOffset(AxesRaw *acc)
     }
     ax_offset = acc_offset_sum.x / (float)(max_cali_count);
     ay_offset = acc_offset_sum.y / (float)(max_cali_count);
-    az_offset = acc_offset_sum.z / (float)(max_cali_count) + g;
+    // az_offset = acc_offset_sum.z / (float)(max_cali_count);
+    az_offset = acc_offset_sum.z / (float)(max_cali_count) + 1.0f;
+    printf("acc offset = %f,\t%f,\t%f\t\r\n", ax_offset, ay_offset, az_offset);
 }
 
 void CalcGyroOffset(AxesRaw *gyro)
@@ -226,10 +227,27 @@ void CalcGyroOffset(AxesRaw *gyro)
 
 void SetInitialMag(AxesRaw *mag)
 {
+    // AxesRaw mag_sum = {0, 0, 0};
+    // for (int i = 0; i < max_cali_count; i++)
+    // {
+    //     ReadRawMag(mag);
+    //     mag_sum.x += (mag->x - mx_offset);
+    //     mag_sum.y += (mag->y - my_offset);
+    //     mag_sum.z += (mag->z - mz_offset);
+    // }
+    // bx = mag_sum.x / (float)(max_cali_count);
+    // by = mag_sum.y / (float)(max_cali_count);
+    // bz = mag_sum.z / (float)(max_cali_count);
+
     ReadRawMag(mag);
-    mn = mag->x;
-    me = mag->y;
-    md = mag->z;
+    bx = mag->x - mx_offset;
+    by = mag->y - my_offset;
+    bz = mag->z - mz_offset;
+
+    float recipNorm = invSqrt(bx * bx + by * by + bz * bz);
+    bx *= recipNorm;
+    by *= recipNorm;
+    bz *= recipNorm;
 }
 
 void ReadRawAcc(AxesRaw *acc)
@@ -241,11 +259,11 @@ void ReadRawAcc(AxesRaw *acc)
 
     // combine into 16 bit values
     acc_raw = (((int16_t)buffer[0]) << 8) | buffer[1];
-    acc->x = (float)(acc_raw) / ACCEL_FACTOR * g;
+    acc->x = (float)(acc_raw) / ACCEL_FACTOR;
     acc_raw = (((int16_t)buffer[2]) << 8) | buffer[3];
-    acc->y = (float)(acc_raw) / ACCEL_FACTOR * g;
+    acc->y = (float)(acc_raw) / ACCEL_FACTOR;
     acc_raw = (((int16_t)buffer[4]) << 8) | buffer[5];
-    acc->z = (float)(acc_raw) / ACCEL_FACTOR * g;
+    acc->z = (float)(acc_raw) / ACCEL_FACTOR;
 }
 
 void ReadRawGyro(AxesRaw *gyro)
@@ -289,11 +307,11 @@ void ReadSensor(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag)
 
     // combine into 16 bit values
     acc_raw = (((int16_t)buffer[0]) << 8) | buffer[1];
-    acc->x = (float)(acc_raw) / ACCEL_FACTOR * g - ax_offset;
+    acc->x = (float)(acc_raw) / ACCEL_FACTOR - ax_offset;
     acc_raw = (((int16_t)buffer[2]) << 8) | buffer[3];
-    acc->y = (float)(acc_raw) / ACCEL_FACTOR * g - ay_offset;
+    acc->y = (float)(acc_raw) / ACCEL_FACTOR - ay_offset;
     acc_raw = (((int16_t)buffer[4]) << 8) | buffer[5];
-    acc->z = (float)(acc_raw) / ACCEL_FACTOR * g - az_offset;
+    acc->z = (float)(acc_raw) / ACCEL_FACTOR - az_offset;
 
     gyro_raw = (((int16_t)buffer[8]) << 8) | buffer[9];
     gyro->x = (float)(gyro_raw) / GYRO_FACTOR * M_PI / 180.0f - gx_offset; // dps to rad/sec
@@ -307,5 +325,5 @@ void ReadSensor(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag)
     mag_raw = (((int16_t)buffer[15]) << 8) | buffer[14];
     mag->y = (float)(mag_raw) * ((float)(asa[0] - 128) / 256.0f + 1.0f) - my_offset;
     mag_raw = (((int16_t)buffer[19]) << 8) | buffer[18];
-    mag->z = -(float)(mag_raw) * ((float)(asa[2] - 128) / 256.0f + 1.0f) + mz_offset;
+    mag->z = -(float)(mag_raw) * ((float)(asa[2] - 128) / 256.0f + 1.0f) - mz_offset;
 }

@@ -9,6 +9,7 @@
 #define __MPU9250_H_
 
 #include "main.h"
+#include "basic_math.h"
 
 // MPU9250 registers
 #define SMPLRT_DIV 0x19
@@ -77,9 +78,8 @@ void ReadRawGyro(AxesRaw *gyro);
 void ReadRawMag(AxesRaw *mag);
 void ReadSensor(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag);
 
-extern const float g;
-extern float mn;
-extern float me;
-extern float md;
+extern float bx;
+extern float by;
+extern float bz;
 
 #endif /* __MPU9250_H_ */

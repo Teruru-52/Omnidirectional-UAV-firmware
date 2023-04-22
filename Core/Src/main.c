@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "dma.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -30,6 +31,7 @@
 #include "lps25hb.h"
 #include "speaker.h"
 #include "ahrs.h"
+#include "control.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,6 +41,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,28 +67,47 @@ void SystemClock_Config(void);
 // extern osSemaphoreId AHRS_SemaphoreHandle;
 int count = 0;
 float bat_vol;
+const float bat_vol_lim = 7.0f; //[V]
 float pressure;
 AxesRaw acc, gyro, mag;
 AHRS_State ahrs;
+MotorInput motor_input;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
-  /* USER CODE END Callback 0 */
-  /* USER CODE BEGIN Callback 1 */
-  if (htim->Instance == TIM1) // 1kHz interruption
+  if (htim->Instance == TIM1) // 20Hz interruption
   {
-    // osSemaphoreRelease(Control_SemaphoreHandle);
+    // UpdateControl(&ahrs, &motor_input, &bat_vol);
   }
+  /* USER CODE END Callback 0 */
 
+  /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM12) // 100Hz interruption
   {
     // osSemaphoreRelease(AHRS_SemaphoreHandle);
-    ReadSensor(&acc, &gyro, &mag);
+    ReadBatteryVoltage(&bat_vol);
     // ReadPressure(&pressure);
-    // UpdateMadgwickFilter(&acc, &gyro, &mag, &ahrs);
-    UpdateMadgwickFilterIMU(&acc, &gyro, &ahrs);
+
+    ReadSensor(&acc, &gyro, &mag);
+    UpdateMadgwickFilter(&acc, &gyro, &mag, &ahrs);
+    // UpdateMadgwickFilterIMU(&acc, &gyro, &ahrs);
     // UpdateEKF(&acc, &gyro, &mag, &ahrs);
+
+    // osSemaphoreRelease(Control_SemaphoreHandle);
+    // TestControl(&ahrs);
+    UpdateControl(&ahrs, &motor_input, &bat_vol);
+
+    if (bat_vol > bat_vol_lim)
+    {
+      DriveMotor(&motor1, &motor2, &motor3, &motor4,
+                 &motor5, &motor6, &motor7, &motor8, &motor_input);
+    }
+    else
+    {
+      Write_GPIO(USER_LED1, 0);
+      BrakeMotor(&motor1, &motor2, &motor3, &motor4, &motor5, &motor6, &motor7, &motor8);
+    }
     count = (count + 1) % 100;
 
     if (count == 99)
@@ -97,22 +119,42 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       Write_GPIO(USER_LED4, 0);
     }
 
-    if (count % 20 == 0)
+    if (count % 10 == 0)
     {
-      // float roll = atan2(2.0f * (ahrs.q.q0 * ahrs.q.q1 + ahrs.q.q2 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 - ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 + ahrs.q.q3 * ahrs.q.q3);
-      // float pitch = asin(2.0f * (ahrs.q.q0 * ahrs.q.q2 - ahrs.q.q1 * ahrs.q.q3));
-      // float yaw = atan2(2.0f * (ahrs.q.q1 * ahrs.q.q2 + ahrs.q.q0 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 + ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 - ahrs.q.q3 * ahrs.q.q3);
+      float roll = atan2(2.0f * (ahrs.q.q0 * ahrs.q.q1 + ahrs.q.q2 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 - ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 + ahrs.q.q3 * ahrs.q.q3);
+      float pitch = asin(2.0f * (ahrs.q.q0 * ahrs.q.q2 - ahrs.q.q1 * ahrs.q.q3));
+      float yaw = atan2(2.0f * (ahrs.q.q1 * ahrs.q.q2 + ahrs.q.q0 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 + ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 - ahrs.q.q3 * ahrs.q.q3);
+      printf("%.3f\t%.3f\t%.3f\t\r\n", roll, pitch, yaw);
+
+      // for magnetometer calibration
+      // ReadRawMag(&mag);
+      // printf("%.3f, %.3f, %.3f\n", mag.x, mag.y, mag.z);
+
+      // for 2-point suspention
+      // printf("%f\n", gyro.x);
+
+      // for measurement of the rotation velocity of propeller
+      // about 2.27 [V] max
+      // motor_input.inputs[0] = 0.3; // [V]
+      // Voltage2Duty(&motor_input, &bat_vol);
+      // DriveMotor(&motor1, &motor2, &motor3, &motor4,
+      //            &motor5, &motor6, &motor7, &motor8, &motor_input);
+      // printf("%.3f, %.3f\n", bat_vol, motor_input.inputs[0]);
 
       // printf("%f, %f, %f\n", acc.x, acc.y, acc.z);
-      printf("%f, %f, %f\n", gyro.x, gyro.y, gyro.z);
-      // printf("%3f, %3f, %3f\n", mag.x, mag.y, mag.z);
-      // printf("%3f\t%3f\t%3f\t%3f\t\r\n", ahrs.q.q0, ahrs.q.q1, ahrs.q.q2, ahrs.q.q3);
-      // printf("%3f\t%3f\t%3f\t\r\n", roll, pitch, yaw);
+      // printf("%f, %f, %f\n", gyro.x, gyro.y, gyro.z);
+      // printf("%.3f, %.3f, %.3f\n", mag.x, mag.y, mag.z);
+      // printf("%.3f\t%.3f\t%.3f\t%.3f\t\r\n", ahrs.q.q0, ahrs.q.q1, ahrs.q.q2, ahrs.q.q3);
+      // printf("%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t\r\n", motor_input.inputs[0], motor_input.inputs[1], motor_input.inputs[2], motor_input.inputs[3],
+      //        motor_input.inputs[4], motor_input.inputs[5], motor_input.inputs[6], motor_input.inputs[7]);
+      // printf("%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t\r\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
       // printf("pressure = %f\n", pressure);
+      // printf("battery = %f\n", bat_vol);
     }
   }
   /* USER CODE END Callback 1 */
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -143,6 +185,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
   MX_TIM1_Init();
@@ -156,23 +199,8 @@ int main(void)
   MX_SPI3_Init();
   MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim9, TIM_CHANNEL_1);
+  Motor_TIM_Init();
+  Speaker_TIM_Init();
 
   Write_GPIO(USER_LED2, 1);
   ReadBatteryVoltage(&bat_vol);
@@ -181,17 +209,24 @@ int main(void)
   Initialize_LPS25HB();
   CalcAccOffset(&acc);
   CalcGyroOffset(&gyro);
+  SetInitialMag(&mag);
   InitializeAHRS(&ahrs);
-  Beep();
+  InitializeController();
+  TestMotor(&motor1, &motor2, &motor3, &motor4, &motor5, &motor6, &motor7, &motor8);
   Write_GPIO(USER_LED2, 0);
 
-  Motor_TIM_Init();
+  // float duty = 200;
+  // TestMatrix();
+  // for (int i = 0; i < 1000; i++)
+  // {
+  //   UpdateMadgwickFilterIMU(&acc, &gyro, &ahrs);
+  //   printf("%.3f\t%.3f\t%.3f\t%.3f\t\r\n", ahrs.q.q0, ahrs.q.q1, ahrs.q.q2, ahrs.q.q3);
+  // }
 
+  Base_TIM_Init();
   Write_GPIO(USER_LED1, 1);
-  Write_GPIO(USER_LED3, 1);
-  Write_GPIO(USER_LED4, 1);
 
-  int duty = 200;
+  HAL_UART_Receive_DMA(&huart1, RdBuff, RCV_BUFF_SIZE);
 
   /* USER CODE END 2 */
 
@@ -199,68 +234,54 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
     if (Read_GPIO(USER_SW) == 1)
     {
       Write_GPIO(USER_LED3, 0);
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+      // BrakeMotor(&motor1, &motor2, &motor3, &motor4, &motor5, &motor6, &motor7, &motor8);
     }
     else
     {
       Write_GPIO(USER_LED3, 1);
-      // HAL_Delay(3000);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE);
       // HAL_Delay(2000);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
-      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-      // __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, MOTOR_MAX_PWM_VALUE - duty);
+      // PWM_Update(&motor1, duty);
+      // PWM_Update(&motor2, duty);
+      // PWM_Update(&motor3, duty);
+      // PWM_Update(&motor5, duty);
+      // PWM_Update(&motor6, duty);
+      // PWM_Update(&motor7, duty);
+      // PWM_Update(&motor8, duty);
+      // HAL_Delay(2000);
+      // PWM_Update(&motor1, -duty);
+      // PWM_Update(&motor2, -duty);
+      // PWM_Update(&motor3, -duty);
+      // PWM_Update(&motor5, -duty);
+      // PWM_Update(&motor6, -duty);
+      // PWM_Update(&motor7, -duty);
+      // PWM_Update(&motor8, -duty);
       // HAL_Delay(2000);
     }
+
+    if (rdUart(&rdData) == TRUE)
+    {
+      SdBuff[rcvLength++] = rdData;
+      if ((rdData == CHAR_LF) || (rcvLength >= SND_BUFF_SIZE))
+      {
+        HAL_UART_Transmit(&huart1, SdBuff, rcvLength, 0xFFFF);
+        if (Compare_Stop(SdBuff) == TRUE)
+        {
+          Write_GPIO(USER_LED2, 1);
+        }
+        else
+        {
+          Write_GPIO(USER_LED2, 0);
+        }
+        rcvLength = 0;
+      }
+    }
+
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -277,7 +298,8 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage
    */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+
   /** Initializes the RCC Oscillators according to the specified parameters
    * in the RCC_OscInitTypeDef structure.
    */
@@ -295,21 +317,16 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Activate the Over-Drive mode
-   */
-  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
-  {
-    Error_Handler();
-  }
+
   /** Initializes the CPU, AHB and APB buses clocks
    */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }

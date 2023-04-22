@@ -47,9 +47,9 @@ void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 90 - 1;
+  htim1.Init.Prescaler = 900 - 1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1000 - 1;
+  htim1.Init.Period = 10000 - 1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -89,7 +89,7 @@ void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 2500 - 1;
+  htim2.Init.Period = 1000 - 1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
@@ -144,7 +144,7 @@ void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 2500 - 1;
+  htim3.Init.Period = 1000 - 1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -199,7 +199,7 @@ void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 2500 - 1;
+  htim4.Init.Period = 1000 - 1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
@@ -254,7 +254,7 @@ void MX_TIM5_Init(void)
   htim5.Instance = TIM5;
   htim5.Init.Prescaler = 0;
   htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim5.Init.Period = 2500 - 1;
+  htim5.Init.Period = 1000 - 1;
   htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim5) != HAL_OK)
@@ -302,7 +302,7 @@ void MX_TIM8_Init(void)
   htim8.Instance = TIM8;
   htim8.Init.Prescaler = 0;
   htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim8.Init.Period = 2500 - 1;
+  htim8.Init.Period = 1000 - 1;
   htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim8.Init.RepetitionCounter = 0;
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -814,10 +814,27 @@ Motor motor6 = {ENABLE, &htim4, TIM_CHANNEL_3, TIM_CHANNEL_4};
 Motor motor7 = {ENABLE, &htim2, TIM_CHANNEL_1, TIM_CHANNEL_2};
 Motor motor8 = {ENABLE, &htim5, TIM_CHANNEL_1, TIM_CHANNEL_2};
 
-void Motor_TIM_Init(void)
+void Base_TIM_Init()
 {
   HAL_TIM_Base_Start_IT(&htim1);
   HAL_TIM_Base_Start_IT(&htim12);
+}
+
+void Motor_TIM_Init()
+{
+  PWM_Start(&motor1);
+  PWM_Start(&motor2);
+  PWM_Start(&motor3);
+  PWM_Start(&motor4);
+  PWM_Start(&motor5);
+  PWM_Start(&motor6);
+  PWM_Start(&motor7);
+  PWM_Start(&motor8);
+}
+
+void Speaker_TIM_Init()
+{
+  HAL_TIM_PWM_Start(&htim9, TIM_CHANNEL_1);
 }
 
 void PWM_Start(Motor *motor)
@@ -835,6 +852,8 @@ void PWM_Start(Motor *motor)
 
 void PWM_Stop(Motor *motor)
 {
+  // PWM_Update(motor, 0.0);
+  // PWM_Set(motor, 0.0);
   if (HAL_TIM_PWM_Stop(motor->htim, motor->CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -843,26 +862,25 @@ void PWM_Stop(Motor *motor)
   {
     Error_Handler();
   }
-  PWM_Update(motor, 0.0);
   motor->OutputPWM = DISABLE;
 }
 
 void PWM_Set(Motor *motor, float duty)
 {
-  if (duty > MOTOR_MAX_PWM_VALUE)
-    duty = MOTOR_MAX_PWM_VALUE;
-  else if (duty < -MOTOR_MAX_PWM_VALUE)
-    duty = -MOTOR_MAX_PWM_VALUE;
+  if (duty > MOTOR_UPPER_PWM_VALUE)
+    duty = MOTOR_UPPER_PWM_VALUE;
+  else if (duty < 0)
+    duty = 0.0;
 
   if (duty > 0)
   {
-    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_1, MOTOR_MAX_PWM_VALUE - duty);
-    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_2, MOTOR_MAX_PWM_VALUE);
+    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_1, 0);
+    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_2, duty);
   }
   else
   {
-    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_1, MOTOR_MAX_PWM_VALUE);
-    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_2, MOTOR_MAX_PWM_VALUE + duty);
+    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_1, 0);
+    __HAL_TIM_SET_COMPARE(motor->htim, motor->CHANNEL_2, 0);
   }
 }
 

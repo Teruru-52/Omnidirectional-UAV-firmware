@@ -19,9 +19,40 @@ typedef struct
     float gx_offset, gy_offset, gz_offset;
 } AHRS_State;
 
+/* matrixes in Madgwick Filter */
+float coeff_nabla_fg[4];
+float coeff_nabla_fb[4];
+
+arm_matrix_instance_f32 mat_nabla_fg;
+arm_matrix_instance_f32 mat_fg;
+arm_matrix_instance_f32 mat_transJg;
+
+arm_matrix_instance_f32 mat_nabla_fb;
+arm_matrix_instance_f32 mat_fb;
+arm_matrix_instance_f32 mat_transJb;
+
 /* matrixes in Externded Kalman Filter */
 float coeff_estX[7];
 float coeff_barX[7];
+float coeff_gm[6];
+
+float coeff_transA[49];
+float coeff_C[42];
+float coeff_barP[49];
+float coeff_AP[49];
+float coeff_APtransA[49];
+float coeff_G[42];
+float coeff_Gnum[42];
+float coeff_Gden[36];
+float coeff_transCbarP[42];
+float coeff_transCbarPC[36];
+float coeff_invGden[36];
+float coeff_H[6];
+float coeff_E[6];
+float coeff_GE[7];
+
+float coeff_GtransC[49];
+float coeff_GtransCbarP[49];
 
 arm_matrix_instance_f32 mat_transA;
 arm_matrix_instance_f32 mat_C;
@@ -53,8 +84,11 @@ arm_matrix_instance_f32 mat_Y;
 arm_matrix_instance_f32 mat_invR; // invR = transR
 
 void InitializeAHRS(AHRS_State *ahrs);
+void TestMatrix();
 void UpdateMadgwickFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
 void UpdateMadgwickFilterIMU(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs);
+void CalcNabla_fg(AxesRaw *acc, AHRS_State *ahrs);
+void CalcNabla_fb(AxesRaw *mag, AHRS_State *ahrs);
 void UpdateEKF(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
 
 #endif /* __AHRS_H_ */

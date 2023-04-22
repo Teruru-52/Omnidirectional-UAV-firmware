@@ -1,5 +1,13 @@
 #include "basic_math.h"
 
+float Sign(float x)
+{
+  if (x > 0.0)
+    return 1.0;
+  else if (x < 0.0)
+    return -1.0;
+}
+
 float Sqrt(float x)
 {
   union
