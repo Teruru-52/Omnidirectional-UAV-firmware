@@ -9,7 +9,7 @@ P = r / sqrt(3) * [1 -1 1 -1 1 -1 1 -1;
 
 % around the center of rotation
 L = 0.155;
-ro = L  / 2 * [1; 1; 1];
+ro = L  / 2 * [1; 1; 1]
 P = ro + P
  
 % orientation matrix

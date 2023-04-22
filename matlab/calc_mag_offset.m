@@ -37,9 +37,9 @@ A(4, 3) = A(2, 1);
 A(4, 4) = A(3, 1);
 
 x = A\B;
-mx_offset = - 0.5 * x(2);
-my_offset = - 0.5 * x(3);
-mz_offset = - 0.5 * x(4);
+mx_offset = - 0.5 * x(2)
+my_offset = - 0.5 * x(3)
+mz_offset = - 0.5 * x(4)
 radius = sqrt(mx_offset^2 + my_offset^2 + mz_offset^2 - x(1)^2);
 
 %% plot
