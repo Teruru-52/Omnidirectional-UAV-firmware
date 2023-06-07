@@ -18,7 +18,7 @@ X = [-a b -b a a -b b -a;
 
 figure(1);
 for i = 1:8
-    quiver3(P(1,i), P(2,i), P(3,i), X(1, i), X(2, i), X(3,i), 0, 'LineWidth', 2);
+    quiver3(P(1,i), P(2,i), P(3,i), X(1, i), X(2, i), X(3,i), 0, 'LineWidth', 5);
     hold on
 end
 axis equal

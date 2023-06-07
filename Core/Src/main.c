@@ -78,7 +78,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
   if (htim->Instance == TIM1) // 20Hz interruption
   {
-    // UpdateControl(&ahrs, &motor_input, &bat_vol);
+    // UpdateQuaternionControl(&ahrs, &motor_input, &bat_vol);
   }
   /* USER CODE END Callback 0 */
 
@@ -90,13 +90,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     // ReadPressure(&pressure);
 
     ReadSensor(&acc, &gyro, &mag);
-    UpdateMadgwickFilter(&acc, &gyro, &mag, &ahrs);
-    // UpdateMadgwickFilterIMU(&acc, &gyro, &ahrs);
+    // UpdateMadgwickFilter(&acc, &gyro, &mag, &ahrs);
+    UpdateMadgwickFilterIMU(&acc, &gyro, &ahrs);
     // UpdateEKF(&acc, &gyro, &mag, &ahrs);
 
     // osSemaphoreRelease(Control_SemaphoreHandle);
     // TestControl(&ahrs);
-    UpdateControl(&ahrs, &motor_input, &bat_vol);
+    // UpdateQuaternionControl(&ahrs, &motor_input, &bat_vol);
+    UpdateEulerControl(&ahrs, &motor_input, &bat_vol);
 
     if (bat_vol > bat_vol_lim)
     {
@@ -110,7 +111,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     }
     count = (count + 1) % 100;
 
-    if (count == 99)
+    if (count == 0)
     {
       Write_GPIO(USER_LED4, 1);
     }
