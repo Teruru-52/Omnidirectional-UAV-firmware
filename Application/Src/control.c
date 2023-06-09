@@ -21,13 +21,13 @@ AxesRaw omega_des;
 const float J = 0.0017f;
 const float tau_att = 0.05f;
 const float tau_omega = 0.05f;
-const float kappa_f = 8e-7f;
+const float kappa_f = 1e-6f;
 const float param_rps2voltage[5] = {2.1967e-09, -1.1731e-6, 2.3771e-04, -0.0136, 0.5331};
 const float rps_max = 248.333f;
 float err_threshold = 0.05;
 float coeff_tau_att, coeff_tau_omega, coeff_kappa_f;
 float coeff_J;
-float theta_des, phi_des;
+float theta_des, phi_des_edge, phi_des_vertex;
 
 // around the center of gravity
 // const float32_t coeff_pinvM[24] = {
@@ -55,21 +55,22 @@ void InitializeController()
 {
     // const float angle_offset = -M_PI / 37.5f;
     // const float angle_offset = -M_PI / 42.0f;
-    const float angle_offset = -M_PI / 180.0f;
+    // const float angle_offset = -M_PI / 180.0f;
     // const float angle_offset = 0.045;
-    // const float angle_offset = 0;
-    theta_des = -M_PI / 4.0f + angle_offset;
+    const float angle_offset = 0;
+    theta_des = -M_PI / 4.0f + angle_offset; // common
     // inverted at the edge
+    phi_des_edge = 0;
     q_des_edge.q0 = cos(theta_des / 2.0f);
     q_des_edge.q1 = 0.0f;
     q_des_edge.q2 = sin(theta_des / 2.0f);
     q_des_edge.q3 = 0.0f;
     // inverted at the vertex
-    phi_des = atan(1.0f / sqrt(2.0f)) + angle_offset;
-    q_des_vertex.q0 = cos(phi_des / 2.0f) * cos(theta_des / 2.0f);
-    q_des_vertex.q1 = sin(phi_des / 2.0f) * cos(theta_des / 2.0f);
-    q_des_vertex.q2 = cos(phi_des / 2.0f) * sin(theta_des / 2.0f);
-    q_des_vertex.q3 = -sin(phi_des / 2.0f) * sin(theta_des / 2.0f);
+    phi_des_vertex = atan(1.0f / sqrt(2.0f)) + angle_offset;
+    q_des_vertex.q0 = cos(phi_des_vertex / 2.0f) * cos(theta_des / 2.0f);
+    q_des_vertex.q1 = sin(phi_des_vertex / 2.0f) * cos(theta_des / 2.0f);
+    q_des_vertex.q2 = cos(phi_des_vertex / 2.0f) * sin(theta_des / 2.0f);
+    q_des_vertex.q3 = -sin(phi_des_vertex / 2.0f) * sin(theta_des / 2.0f);
     // printf("q_des_vertex = %.3f,\t%.3f,\t%.3f,\t%.3f\t\r\n", q_des_vertex.q0, q_des_vertex.q1, q_des_vertex.q2, q_des_vertex.q3);
 
     coeff_tau_att = 2.0f / tau_att;
@@ -251,11 +252,9 @@ void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float *b
     // Quaternion q_des_conj, q_err_conj, q_tmp1, q_tmp2;
 
     q_subs_edge.q0 = ahrs->q.q0 - q_des_edge.q0;
-    q_subs_edge.q1 = 0;
-    // q_subs_edge.q1 = ahrs->q.q1 - q_des_edge.q1;
+    q_subs_edge.q1 = ahrs->q.q1 - q_des_edge.q1;
     q_subs_edge.q2 = ahrs->q.q2 - q_des_edge.q2;
-    q_subs_edge.q3 = 0;
-    // q_subs_edge.q3 = ahrs->q.q3 - q_des_edge.q3;
+    q_subs_edge.q3 = ahrs->q.q3 - q_des_edge.q3;
 
     q_subs_vertex.q0 = ahrs->q.q0 - q_des_vertex.q0;
     q_subs_vertex.q1 = ahrs->q.q1 - q_des_vertex.q1;
@@ -335,10 +334,11 @@ void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float *b
 void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float *bat_vol)
 {
     // edge
-    phi_des = 0;
+    phi_des_edge = 0;
     // vertex
-    // phi_des = 0.755;
+    // phi_des_vertex = 0.755;
     // theta_des = -0.584;
+
     err_threshold = 0.1;
     AxesRaw euler_angle;
     AxesRaw error_angle = {0, 0, 0};
@@ -348,23 +348,22 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float *bat_vo
     euler_angle.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 - ahrs->q.q1 * ahrs->q.q3));
     euler_angle.z = atan2(2.0f * (ahrs->q.q1 * ahrs->q.q2 + ahrs->q.q0 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 + ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 - ahrs->q.q3 * ahrs->q.q3);
 
-    // error_angle.x = phi_des - euler_angle.x;
-    error_angle.x = 0;
     error_angle.y = theta_des - euler_angle.y;
 
     // float errorNorm_edge = Sqrt(error_angle.y * error_angle.y);
-    float errorNorm_edge = Sqrt(error_angle.x * error_angle.x + error_angle.y * error_angle.y);
+    float errorNorm_edge = Sqrt(error_angle.y * error_angle.y);
     // float errorNorm_vertex = Sqrt(q_subs_vertex.q0 * q_subs_vertex.q0 + q_subs_vertex.q1 * q_subs_vertex.q1 + q_subs_vertex.q2 * q_subs_vertex.q2 + q_subs_vertex.q3 * q_subs_vertex.q3);
     // if (errorNorm_edge < err_threshold || errorNorm_vertex < err_threshold)
     if (errorNorm_edge < err_threshold)
+    // if (errorNorm_vertex < err_threshold)
     {
         Write_GPIO(USER_LED2, 1);
 
         // edge
-        float kp = 2.3;
-        // float ki = 0.001f;
-        float ki = 0;
-        float kd = 0.4;
+        float kp = 1.5;
+        float ki = 0.001f;
+        // float ki = 0;
+        float kd = 0.8;
 
         // vertex
         // float kp = 2.5;
@@ -407,6 +406,7 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float *bat_vo
         //        motor_input->inputs[4], motor_input->inputs[5], motor_input->inputs[6], motor_input->inputs[7]);
     }
     else if (errorNorm_edge > err_threshold)
+    // else if (errorNorm_vertex > err_threshold)
     {
         err_pitch_sum = 0;
         Write_GPIO(USER_LED2, 0);
