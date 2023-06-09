@@ -286,25 +286,15 @@ void CalcNabla_fg(AxesRaw *acc, AHRS_State *ahrs)
     float q2q3 = ahrs->q.q2 * ahrs->q.q3;
 
     // Gradient decent algorithm corrective step
-    float coeff_fg[3];
-    coeff_fg[0] = -2.0f * (q1q3 - q0q2) - acc->x;
-    coeff_fg[1] = -2.0f * (q0q1 + q2q3) - acc->y;
-    coeff_fg[2] = -2.0f * (0.5f - q1q1 - q2q2) - acc->z;
+    float coeff_fg[3] = {-2.0f * (q1q3 - q0q2) - acc->x,
+                         -2.0f * (q0q1 + q2q3) - acc->y,
+                         -2.0f * (0.5f - q1q1 - q2q2) - acc->z};
     arm_mat_init_f32(&mat_fg, 3, 1, coeff_fg);
 
-    float coeff_transJg[12];
-    coeff_transJg[0] = _2q2;
-    coeff_transJg[1] = -_2q1;
-    coeff_transJg[2] = 0;
-    coeff_transJg[3] = -_2q3;
-    coeff_transJg[4] = -_2q0;
-    coeff_transJg[5] = _4q1;
-    coeff_transJg[6] = _2q0;
-    coeff_transJg[7] = -_2q3;
-    coeff_transJg[8] = _4q2;
-    coeff_transJg[9] = -_2q1;
-    coeff_transJg[10] = -_2q2;
-    coeff_transJg[11] = 0;
+    float coeff_transJg[12] = {_2q2, -_2q1, 0,
+                               -_2q3, -_2q0, _4q1,
+                               _2q0, -_2q3, _4q2,
+                               -_2q1, -_2q2, 0};
     arm_mat_init_f32(&mat_transJg, 4, 3, coeff_transJg);
 
     arm_mat_mult_f32(&mat_transJg, &mat_fg, &mat_nabla_fg);
