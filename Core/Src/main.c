@@ -101,8 +101,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     if (bat_vol > bat_vol_lim)
     {
-      DriveMotor(&motor1, &motor2, &motor3, &motor4,
-                 &motor5, &motor6, &motor7, &motor8, &motor_input);
+      // DriveMotor(&motor1, &motor2, &motor3, &motor4,
+      //            &motor5, &motor6, &motor7, &motor8, &motor_input);
     }
     else
     {
@@ -120,7 +120,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       Write_GPIO(USER_LED4, 0);
     }
 
-    if (count % 10 == 0)
+    if (count % 20 == 0)
     {
       float roll = atan2(2.0f * (ahrs.q.q0 * ahrs.q.q1 + ahrs.q.q2 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 - ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 + ahrs.q.q3 * ahrs.q.q3);
       float pitch = asin(2.0f * (ahrs.q.q0 * ahrs.q.q2 - ahrs.q.q1 * ahrs.q.q3));
