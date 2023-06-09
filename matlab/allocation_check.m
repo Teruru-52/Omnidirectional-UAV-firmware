@@ -27,7 +27,7 @@ error = tau - M*f;
 
 error_norm = zeros(length(error), 1);
 for i = 1:length(error)
-    error_norm(i, 1) = norm(error(:, i))
+    error_norm(i, 1) = norm(error(:, i));
 end
 
 objv - error_norm;
