@@ -12,6 +12,7 @@ float by = 0;
 float bz = 0;
 
 float ax_offset = -0.001176f, ay_offset = -0.001515f, az_offset = -0.045435f;
+// float ax_offset = 0, ay_offset = 0, az_offset = 0;
 float gx_offset = 0, gy_offset = 0, gz_offset = 0;
 // at my apartment
 float mx_offset = -1274.5f, my_offset = 27.4787f, mz_offset = 600.4536f;
@@ -206,7 +207,7 @@ void CalcAccOffset(AxesRaw *acc)
     ax_offset = acc_offset_sum.x / (float)(max_cali_count);
     ay_offset = acc_offset_sum.y / (float)(max_cali_count);
     // az_offset = acc_offset_sum.z / (float)(max_cali_count);
-    az_offset = acc_offset_sum.z / (float)(max_cali_count) + 1.0f;
+    az_offset = acc_offset_sum.z / (float)(max_cali_count) + 1.06f;
     printf("acc offset = %f,\t%f,\t%f\t\r\n", ax_offset, ay_offset, az_offset);
 }
 
