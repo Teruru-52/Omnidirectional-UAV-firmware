@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
 #include "spi.h"
@@ -57,104 +58,21 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-// extern osSemaphoreId Control_SemaphoreHandle;
-// extern osSemaphoreId AHRS_SemaphoreHandle;
+extern osSemaphoreId ControlSemaphoreHandle;
+extern osSemaphoreId LogSemaphoreHandle;
+
 int count = 0;
-float bat_vol;
-const float bat_vol_lim = 7.0f; //[V]
-float pressure;
-AxesRaw acc, gyro, mag;
-AHRS_State ahrs;
-MotorInput motor_input;
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
-  if (htim->Instance == TIM1) // 20Hz interruption
-  {
-    // UpdateQuaternionControl(&ahrs, &motor_input, &bat_vol);
-  }
-  /* USER CODE END Callback 0 */
-
-  /* USER CODE BEGIN Callback 1 */
-  if (htim->Instance == TIM12) // 100Hz interruption
-  {
-    // osSemaphoreRelease(AHRS_SemaphoreHandle);
-    ReadBatteryVoltage(&bat_vol);
-    // ReadPressure(&pressure);
-
-    ReadSensor(&acc, &gyro, &mag);
-    // UpdateMadgwickFilter(&acc, &gyro, &mag, &ahrs);
-    UpdateMadgwickFilterIMU(&acc, &gyro, &ahrs);
-    // UpdateEKF(&acc, &gyro, &mag, &ahrs);
-
-    // osSemaphoreRelease(Control_SemaphoreHandle);
-    // TestControl(&ahrs);
-    // UpdateQuaternionControl(&ahrs, &motor_input, &bat_vol);
-    UpdateEulerControl(&ahrs, &motor_input, &bat_vol);
-
-    if (bat_vol > bat_vol_lim)
-    {
-      // DriveMotor(&motor1, &motor2, &motor3, &motor4,
-      //            &motor5, &motor6, &motor7, &motor8, &motor_input);
-    }
-    else
-    {
-      Write_GPIO(USER_LED1, 0);
-      BrakeMotor(&motor1, &motor2, &motor3, &motor4, &motor5, &motor6, &motor7, &motor8);
-    }
-    count = (count + 1) % 100;
-
-    if (count == 0)
-    {
-      Write_GPIO(USER_LED4, 1);
-    }
-    else
-    {
-      Write_GPIO(USER_LED4, 0);
-    }
-
-    if (count % 20 == 0)
-    {
-      float roll = atan2(2.0f * (ahrs.q.q0 * ahrs.q.q1 + ahrs.q.q2 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 - ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 + ahrs.q.q3 * ahrs.q.q3);
-      float pitch = asin(2.0f * (ahrs.q.q0 * ahrs.q.q2 - ahrs.q.q1 * ahrs.q.q3));
-      float yaw = atan2(2.0f * (ahrs.q.q1 * ahrs.q.q2 + ahrs.q.q0 * ahrs.q.q3), ahrs.q.q0 * ahrs.q.q0 + ahrs.q.q1 * ahrs.q.q1 - ahrs.q.q2 * ahrs.q.q2 - ahrs.q.q3 * ahrs.q.q3);
-      printf("%.3f\t%.3f\t%.3f\t\r\n", roll, pitch, yaw);
-
-      // for magnetometer calibration
-      // ReadRawMag(&mag);
-      // printf("%.3f, %.3f, %.3f\n", mag.x, mag.y, mag.z);
-
-      // for 2-point suspention
-      // printf("%f\n", gyro.x);
-
-      // for measurement of the rotation velocity of propeller
-      // about 2.27 [V] max
-      // motor_input.inputs[0] = 0.3; // [V]
-      // Voltage2Duty(&motor_input, &bat_vol);
-      // DriveMotor(&motor1, &motor2, &motor3, &motor4,
-      //            &motor5, &motor6, &motor7, &motor8, &motor_input);
-      // printf("%.3f, %.3f\n", bat_vol, motor_input.inputs[0]);
-
-      // printf("%f, %f, %f\n", acc.x, acc.y, acc.z);
-      // printf("%f, %f, %f\n", gyro.x, gyro.y, gyro.z);
-      // printf("%.3f, %.3f, %.3f\n", mag.x, mag.y, mag.z);
-      // printf("%.3f\t%.3f\t%.3f\t%.3f\t\r\n", ahrs.q.q0, ahrs.q.q1, ahrs.q.q2, ahrs.q.q3);
-      // printf("%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t\r\n", motor_input.inputs[0], motor_input.inputs[1], motor_input.inputs[2], motor_input.inputs[3],
-      //        motor_input.inputs[4], motor_input.inputs[5], motor_input.inputs[6], motor_input.inputs[7]);
-      // printf("%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t\r\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
-      // printf("pressure = %f\n", pressure);
-      // printf("battery = %f\n", bat_vol);
-    }
-  }
-  /* USER CODE END Callback 1 */
-}
+extern float bat_vol;
+// extern float pressure;
+extern AxesRaw acc, gyro, mag;
+extern AHRS_State ahrs;
 
 /* USER CODE END 0 */
 
@@ -224,62 +142,23 @@ int main(void)
   //   printf("%.3f\t%.3f\t%.3f\t%.3f\t\r\n", ahrs.q.q0, ahrs.q.q1, ahrs.q.q2, ahrs.q.q3);
   // }
 
-  Base_TIM_Init();
+  HAL_TIM_Base_Start_IT(&htim1);
   Write_GPIO(USER_LED1, 1);
 
   HAL_UART_Receive_DMA(&huart1, RdBuff, RCV_BUFF_SIZE);
 
   /* USER CODE END 2 */
 
+  /* Call init function for freertos objects (in freertos.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    if (Read_GPIO(USER_SW) == 1)
-    {
-      Write_GPIO(USER_LED3, 0);
-      // BrakeMotor(&motor1, &motor2, &motor3, &motor4, &motor5, &motor6, &motor7, &motor8);
-    }
-    else
-    {
-      Write_GPIO(USER_LED3, 1);
-      // HAL_Delay(2000);
-      // PWM_Update(&motor1, duty);
-      // PWM_Update(&motor2, duty);
-      // PWM_Update(&motor3, duty);
-      // PWM_Update(&motor5, duty);
-      // PWM_Update(&motor6, duty);
-      // PWM_Update(&motor7, duty);
-      // PWM_Update(&motor8, duty);
-      // HAL_Delay(2000);
-      // PWM_Update(&motor1, -duty);
-      // PWM_Update(&motor2, -duty);
-      // PWM_Update(&motor3, -duty);
-      // PWM_Update(&motor5, -duty);
-      // PWM_Update(&motor6, -duty);
-      // PWM_Update(&motor7, -duty);
-      // PWM_Update(&motor8, -duty);
-      // HAL_Delay(2000);
-    }
-
-    if (rdUart(&rdData) == TRUE)
-    {
-      SdBuff[rcvLength++] = rdData;
-      if ((rdData == CHAR_LF) || (rcvLength >= SND_BUFF_SIZE))
-      {
-        HAL_UART_Transmit(&huart1, SdBuff, rcvLength, 0xFFFF);
-        if (Compare_Stop(SdBuff) == TRUE)
-        {
-          Write_GPIO(USER_LED2, 1);
-        }
-        else
-        {
-          Write_GPIO(USER_LED2, 0);
-        }
-        rcvLength = 0;
-      }
-    }
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -336,6 +215,49 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/**
+ * @brief  Period elapsed callback in non blocking mode
+ * @note   This function is called  when TIM6 interrupt took place, inside
+ * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+ * a global variable "uwTick" used as application time base.
+ * @param  htim : TIM handle
+ * @retval None
+ */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+  if (htim->Instance == TIM1) // 20Hz interruption
+  {
+    // UpdateQuaternionControl(&ahrs, &motor_input, &bat_vol);
+  }
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+  if (htim->Instance == TIM12) // 100Hz interruption
+  {
+    osSemaphoreRelease(ControlSemaphoreHandle);
+    count = (count + 1) % 100;
+
+    if (count == 0) // 1Hz
+    {
+      Write_GPIO(USER_LED4, 1);
+    }
+    else
+    {
+      Write_GPIO(USER_LED4, 0);
+    }
+
+    if (count % 25 == 0)
+    {
+      osSemaphoreRelease(LogSemaphoreHandle);
+    }
+  }
+  /* USER CODE END Callback 1 */
+}
 
 /**
  * @brief  This function is executed in case of error occurrence.

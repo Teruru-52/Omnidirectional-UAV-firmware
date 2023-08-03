@@ -11,10 +11,12 @@
 #include "main.h"
 #include "mpu9250.h"
 #include "quaternion.h"
+#include "kalman.h"
 
 typedef struct
 {
     Quaternion q;     // Current altitude
+    AxesRaw euler;    // Current altitude
     float gx, gy, gz; // Current angle rate @ body frame
     float gx_offset, gy_offset, gz_offset;
 } AHRS_State;
@@ -83,12 +85,22 @@ arm_matrix_instance_f32 mat_transC;
 arm_matrix_instance_f32 mat_Y;
 arm_matrix_instance_f32 mat_invR; // invR = transR
 
+/* variables in Complimantary Filter */
+float roll_filt;
+float pitch_filt;
+float yaw_filt;
+
 void InitializeAHRS(AHRS_State *ahrs);
-void TestMatrix();
+// void TestMatrix();
+void UpdateAHRS(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
 void UpdateMadgwickFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
 void UpdateMadgwickFilterIMU(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs);
 void CalcNabla_fg(AxesRaw *acc, AHRS_State *ahrs);
 void CalcNabla_fb(AxesRaw *mag, AHRS_State *ahrs);
 void UpdateEKF(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
+void UpdateKF(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs); // only pitch angle
+void UpdateComplimentaryFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs);
 
+void Convertq2Euler(AHRS_State *ahrs);
+void ConvertEuler2q(AHRS_State *ahrs);
 #endif /* __AHRS_H_ */

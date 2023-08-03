@@ -14,6 +14,7 @@ float zeta;
 float _2bx;
 float _2by;
 float _2bz;
+float kappa;
 
 const float32_t coeff_V[49] = {
     1e-3f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -47,6 +48,9 @@ void InitializeAHRS(AHRS_State *ahrs)
     ahrs->q.q1 = 0.0f;
     ahrs->q.q2 = 0.0f;
     ahrs->q.q3 = 0.0f;
+    ahrs->euler.x = 0.0f;
+    ahrs->euler.y = 0.0f;
+    ahrs->euler.z = 0.0f;
     ahrs->gx_offset = 0.0f;
     ahrs->gy_offset = 0.0f;
     ahrs->gz_offset = 0.0f;
@@ -78,62 +82,78 @@ void InitializeAHRS(AHRS_State *ahrs)
     coeff_gm[4] = by;
     coeff_gm[5] = bz;
 
-    arm_mat_init_f32(&mat_transA, 7, 7, coeff_transA);
-    arm_mat_init_f32(&mat_C, 7, 6, coeff_C);
-    arm_mat_init_f32(&mat_estX, 7, 1, coeff_estX);
-    arm_mat_init_f32(&mat_barX, 7, 1, coeff_barX);
-    arm_mat_init_f32(&mat_gm, 6, 1, coeff_gm);
-    arm_mat_init_f32(&mat_V, 7, 7, (float32_t *)coeff_V);
-    arm_mat_init_f32(&mat_W, 6, 6, (float32_t *)coeff_W);
-    arm_mat_init_f32(&mat_barP, 7, 7, coeff_barP);
-    arm_mat_init_f32(&mat_AP, 7, 7, coeff_AP);
-    arm_mat_init_f32(&mat_APtransA, 7, 7, coeff_APtransA);
-    arm_mat_init_f32(&mat_G, 7, 6, coeff_G);
-    arm_mat_init_f32(&mat_Gnum, 7, 6, coeff_Gnum);
-    arm_mat_init_f32(&mat_Gden, 6, 6, coeff_Gden);
-    arm_mat_init_f32(&mat_transCbarP, 6, 7, coeff_transCbarP);
-    arm_mat_init_f32(&mat_transCbarPC, 6, 6, coeff_transCbarPC);
-    arm_mat_init_f32(&mat_invGden, 6, 6, coeff_invGden);
-    arm_mat_init_f32(&mat_H, 6, 1, coeff_H);
-    arm_mat_init_f32(&mat_E, 6, 1, coeff_E);
-    arm_mat_init_f32(&mat_GE, 7, 1, coeff_GE);
-    arm_mat_init_f32(&mat_P, 7, 7, (float32_t *)coeff_P);
-    arm_mat_init_f32(&mat_GtransC, 7, 7, coeff_GtransC);
-    arm_mat_init_f32(&mat_GtransCbarP, 7, 7, coeff_GtransCbarP);
+    // arm_mat_init_f32(&mat_transA, 7, 7, coeff_transA);
+    // arm_mat_init_f32(&mat_C, 7, 6, coeff_C);
+    // arm_mat_init_f32(&mat_estX, 7, 1, coeff_estX);
+    // arm_mat_init_f32(&mat_barX, 7, 1, coeff_barX);
+    // arm_mat_init_f32(&mat_gm, 6, 1, coeff_gm);
+    // arm_mat_init_f32(&mat_V, 7, 7, (float32_t *)coeff_V);
+    // arm_mat_init_f32(&mat_W, 6, 6, (float32_t *)coeff_W);
+    // arm_mat_init_f32(&mat_barP, 7, 7, coeff_barP);
+    // arm_mat_init_f32(&mat_AP, 7, 7, coeff_AP);
+    // arm_mat_init_f32(&mat_APtransA, 7, 7, coeff_APtransA);
+    // arm_mat_init_f32(&mat_G, 7, 6, coeff_G);
+    // arm_mat_init_f32(&mat_Gnum, 7, 6, coeff_Gnum);
+    // arm_mat_init_f32(&mat_Gden, 6, 6, coeff_Gden);
+    // arm_mat_init_f32(&mat_transCbarP, 6, 7, coeff_transCbarP);
+    // arm_mat_init_f32(&mat_transCbarPC, 6, 6, coeff_transCbarPC);
+    // arm_mat_init_f32(&mat_invGden, 6, 6, coeff_invGden);
+    // arm_mat_init_f32(&mat_H, 6, 1, coeff_H);
+    // arm_mat_init_f32(&mat_E, 6, 1, coeff_E);
+    // arm_mat_init_f32(&mat_GE, 7, 1, coeff_GE);
+    // arm_mat_init_f32(&mat_P, 7, 7, (float32_t *)coeff_P);
+    // arm_mat_init_f32(&mat_GtransC, 7, 7, coeff_GtransC);
+    // arm_mat_init_f32(&mat_GtransCbarP, 7, 7, coeff_GtransCbarP);
+
+    InitializeKalmanFilter();
+
+    roll_filt = 0;
+    pitch_filt = 0;
+    yaw_filt = 0;
+    kappa = 0.8f;
 }
 
-void TestMatrix()
+// void TestMatrix()
+// {
+//     arm_matrix_instance_f32 mat_A;
+//     arm_matrix_instance_f32 mat_trA;
+//     arm_matrix_instance_f32 mat_B;
+//     arm_matrix_instance_f32 mat_trAB;
+//     arm_matrix_instance_f32 mat_test1;
+//     arm_matrix_instance_f32 mat_test2;
+//     float test_coeffA[4];
+//     float test_coefftrA[4];
+//     float test_coeffB[4];
+//     float test_coefftrAB[4];
+//     float test_coeff1[4] = {1.0, 2.0,
+//                             3.0, 4.0};
+//     float test_coeff2[4] = {10.0, 20.0,
+//                             30.0, 40.0};
+//     arm_mat_init_f32(&mat_A, 2, 2, test_coeffA);
+//     arm_mat_init_f32(&mat_trA, 2, 2, test_coefftrA);
+//     arm_mat_init_f32(&mat_B, 2, 2, test_coeffB);
+//     arm_mat_init_f32(&mat_trAB, 2, 2, test_coefftrAB);
+//     arm_mat_init_f32(&mat_test1, 2, 2, test_coeff1);
+//     arm_mat_init_f32(&mat_test2, 2, 2, test_coeff2);
+
+//     arm_mat_add_f32(&mat_test1, &mat_test2, &mat_A);
+//     arm_mat_mult_f32(&mat_test1, &mat_test2, &mat_B);
+//     arm_mat_trans_f32(&mat_A, &mat_trA);
+//     arm_mat_mult_f32(&mat_trA, &mat_B, &mat_trAB);
+
+//     printf("A = \n%3f, %3f\n%3f, %3f\n", test_coeffA[0], test_coeffA[1], test_coeffA[2], test_coeffA[3]);
+//     printf("B = \n%3f, %3f\n%3f, %3f\n", test_coeffB[0], test_coeffB[1], test_coeffB[2], test_coeffB[3]);
+//     printf("transA = \n%3f, %3f\n%3f, %3f\n", test_coefftrA[0], test_coefftrA[1], test_coefftrA[2], test_coefftrA[3]);
+//     printf("transA*B = \n%3f, %3f\n%3f, %3f\n", test_coefftrAB[0], test_coefftrAB[1], test_coefftrAB[2], test_coefftrAB[3]);
+// }
+
+void UpdateAHRS(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
 {
-    arm_matrix_instance_f32 mat_A;
-    arm_matrix_instance_f32 mat_trA;
-    arm_matrix_instance_f32 mat_B;
-    arm_matrix_instance_f32 mat_trAB;
-    arm_matrix_instance_f32 mat_test1;
-    arm_matrix_instance_f32 mat_test2;
-    float test_coeffA[4];
-    float test_coefftrA[4];
-    float test_coeffB[4];
-    float test_coefftrAB[4];
-    float test_coeff1[4] = {1.0, 2.0,
-                            3.0, 4.0};
-    float test_coeff2[4] = {10.0, 20.0,
-                            30.0, 40.0};
-    arm_mat_init_f32(&mat_A, 2, 2, test_coeffA);
-    arm_mat_init_f32(&mat_trA, 2, 2, test_coefftrA);
-    arm_mat_init_f32(&mat_B, 2, 2, test_coeffB);
-    arm_mat_init_f32(&mat_trAB, 2, 2, test_coefftrAB);
-    arm_mat_init_f32(&mat_test1, 2, 2, test_coeff1);
-    arm_mat_init_f32(&mat_test2, 2, 2, test_coeff2);
-
-    arm_mat_add_f32(&mat_test1, &mat_test2, &mat_A);
-    arm_mat_mult_f32(&mat_test1, &mat_test2, &mat_B);
-    arm_mat_trans_f32(&mat_A, &mat_trA);
-    arm_mat_mult_f32(&mat_trA, &mat_B, &mat_trAB);
-
-    printf("A = \n%3f, %3f\n%3f, %3f\n", test_coeffA[0], test_coeffA[1], test_coeffA[2], test_coeffA[3]);
-    printf("B = \n%3f, %3f\n%3f, %3f\n", test_coeffB[0], test_coeffB[1], test_coeffB[2], test_coeffB[3]);
-    printf("transA = \n%3f, %3f\n%3f, %3f\n", test_coefftrA[0], test_coefftrA[1], test_coefftrA[2], test_coefftrA[3]);
-    printf("transA*B = \n%3f, %3f\n%3f, %3f\n", test_coefftrAB[0], test_coefftrAB[1], test_coefftrAB[2], test_coefftrAB[3]);
+    // UpdateMadgwickFilter(acc, gyro, mag, ahrs);
+    // UpdateMadgwickFilterIMU(acc, gyro, ahrs);
+    // UpdateEKF(acc, gyro, mag, ahrs);
+    // UpdateKF(acc, gyro, ahrs);
+    UpdateComplimentaryFilter(acc, gyro, mag, ahrs);
 }
 
 void UpdateMadgwickFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
@@ -216,6 +236,8 @@ void UpdateMadgwickFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State 
     ahrs->q.q2 += dq.q2 * dt;
     ahrs->q.q3 += dq.q3 * dt;
     QuaternionNorm(&(ahrs->q));
+
+    Convertq2Euler(ahrs);
 }
 
 void UpdateMadgwickFilterIMU(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs)
@@ -267,6 +289,8 @@ void UpdateMadgwickFilterIMU(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs)
     ahrs->q.q2 += dq.q2 * dt;
     ahrs->q.q3 += dq.q3 * dt;
     QuaternionNorm(&(ahrs->q));
+
+    Convertq2Euler(ahrs);
 }
 
 void CalcNabla_fg(AxesRaw *acc, AHRS_State *ahrs)
@@ -515,4 +539,71 @@ void UpdateEKF(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
     ahrs->gx = gyro->x - ahrs->gx_offset;
     ahrs->gy = gyro->y - ahrs->gy_offset;
     ahrs->gz = gyro->z - ahrs->gz_offset;
+
+    Convertq2Euler(ahrs);
+}
+
+void UpdateKF(AxesRaw *acc, AxesRaw *gyro, AHRS_State *ahrs)
+{
+    float pitch = atan2(acc->x, Sqrt(acc->y * acc->y + acc->z * acc->z));
+    ahrs->euler.y = getAngle(pitch, gyro->y, dt);
+    ahrs->gy = getRate();
+}
+
+void UpdateComplimentaryFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
+{
+    // float roll = -atan2(acc->y, sqrt(acc->x * acc->x + acc->z * acc->z));
+    float roll = -atan2(acc->y, -acc->z);
+    float pitch = atan2(acc->x, Sqrt(acc->y * acc->y + acc->z * acc->z));
+    float yaw = atan2((-mag->y * cos(roll) + mag->z * sin(roll)), (mag->x * cos(pitch) + mag->y * sin(roll) * sin(pitch) + mag->z * cos(roll) * sin(pitch)));
+
+    float dot_roll = gyro->x + (gyro->y * sin(ahrs->euler.x) + gyro->z * cos(ahrs->euler.x)) * tan(ahrs->euler.y);
+    float dot_pitch = gyro->y * cos(ahrs->euler.x) - gyro->z * sin(ahrs->euler.x);
+    float dot_yaw = (gyro->y * sin(ahrs->euler.x) + gyro->z * cos(ahrs->euler.x)) / cos(ahrs->euler.y);
+
+    roll_filt = kappa * roll + (1.0 - kappa) * (roll_filt + dot_roll * dt);
+    pitch_filt = kappa * pitch + (1.0 - kappa) * (pitch_filt + dot_pitch * dt);
+    yaw_filt = kappa * yaw + (1.0 - kappa) * (yaw_filt + dot_yaw * dt);
+
+    ahrs->euler.x = roll_filt;
+    ahrs->euler.y = pitch_filt;
+    ahrs->euler.z = yaw_filt;
+
+    // ConvertEuler2q(ahrs);
+}
+
+void Convertq2Euler(AHRS_State *ahrs)
+{
+    // ZYX Euler
+    ahrs->euler.x = -atan2(2.0f * (-ahrs->q.q0 * ahrs->q.q1 + ahrs->q.q2 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 - ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 + ahrs->q.q3 * ahrs->q.q3);
+    ahrs->euler.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 + ahrs->q.q1 * ahrs->q.q3));
+    ahrs->euler.z = -atan2(2.0f * (ahrs->q.q1 * ahrs->q.q2 - ahrs->q.q0 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 + ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 - ahrs->q.q3 * ahrs->q.q3);
+
+    // XYZ Euler
+    // ahrs->euler.x = atan2(2.0f * (ahrs->q.q0 * ahrs->q.q1 + ahrs->q.q2 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 - ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 + ahrs->q.q3 * ahrs->q.q3);
+    // ahrs->euler.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 - ahrs->q.q1 * ahrs->q.q3));
+    // ahrs->euler.z = atan2(2.0f * (ahrs->q.q1 * ahrs->q.q2 + ahrs->q.q0 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 + ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 - ahrs->q.q3 * ahrs->q.q3);
+}
+
+void ConvertEuler2q(AHRS_State *ahrs)
+{
+    // auxiliary variables to reduce number of repeated operations
+    float sin_roll = sin(ahrs->euler.x * 0.5f);
+    float cos_roll = cos(ahrs->euler.x * 0.5f);
+    float sin_pitch = sin(ahrs->euler.y * 0.5f);
+    float cos_pitch = cos(ahrs->euler.y * 0.5f);
+    float sin_yaw = sin(ahrs->euler.z * 0.5f);
+    float cos_yaw = cos(ahrs->euler.z * 0.5f);
+
+    // ZYX Euler
+    ahrs->q.q0 = -sin_roll * sin_pitch * sin_yaw + cos_roll * cos_pitch * cos_yaw;
+    ahrs->q.q1 = cos_roll * sin_pitch * sin_yaw + sin_roll * cos_pitch * cos_yaw;
+    ahrs->q.q2 = -sin_roll * cos_pitch * sin_yaw + cos_roll * sin_pitch * cos_yaw;
+    ahrs->q.q3 = cos_roll * cos_pitch * sin_yaw + sin_roll * sin_pitch * cos_yaw;
+
+    // XYZ Euler
+    // ahrs->q.q0 = sin_roll * sin_pitch * sin_yaw + cos_roll * cos_pitch * cos_yaw;
+    // ahrs->q.q1 = sin_roll * cos_pitch * cos_yaw - cos_roll * sin_pitch * sin_yaw;
+    // ahrs->q.q2 = sin_roll * cos_pitch * sin_yaw + cos_roll * sin_pitch * cos_yaw;
+    // ahrs->q.q3 = -sin_roll * sin_pitch * cos_yaw + cos_roll * cos_pitch * sin_yaw;
 }

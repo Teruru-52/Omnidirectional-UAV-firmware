@@ -13,21 +13,29 @@ Workspace work;
 Settings settings;
 #define NUMTESTS 0
 
+int inverted_mode;
+// inverted_mode = 0: edge
+// inverted_mode = 1: vertex
+
 Quaternion q_des_edge;
 Quaternion q_des_vertex;
 Quaternion dq_des = {0.0, 0.0, 0.0, 0.0};
 Quaternion q_err, omega_ff;
 AxesRaw omega_des;
 const float J = 0.0017f;
-const float tau_att = 0.05f;
-const float tau_omega = 0.05f;
+const float tau_att = 0.1f;
+const float tau_omega = 0.1f;
 const float kappa_f = 1e-6f;
 const float param_rps2voltage[5] = {2.1967e-09, -1.1731e-6, 2.3771e-04, -0.0136, 0.5331};
 const float rps_max = 248.333f;
-float err_threshold = 0.05;
+const float err_threshold = 0.1;
 float coeff_tau_att, coeff_tau_omega, coeff_kappa_f;
 float coeff_J;
-float theta_des, phi_des_edge, phi_des_vertex;
+float theta_des, theta_des_edge, theta_des_vertex;
+float phi_des, phi_des_edge, phi_des_vertex;
+
+float err_phi_sum = 0;
+float err_pitch_sum = 0;
 
 // around the center of gravity
 // const float32_t coeff_pinvM[24] = {
@@ -51,26 +59,41 @@ const float32_t coeff_pinvM[24] = {
     1.6066f, 3.8342f, 3.9482f,
     0.2567f, -0.9582f, 0.7014f};
 
+// feedback matrix
+// Q = diag([10, 10]), R = 1
+// const float32_t coeff_K_edge[2] = {-0.1059, -0.2146};
+
+// Q = diag([100, 10]), R = 1
+// const float32_t coeff_K_edge[2] = {-0.5598, -0.2159};
+
+// Q = diag([100, 1]), R = 1
+const float32_t coeff_K_edge[2] = {-1.8322, -0.2098};
+
 void InitializeController()
 {
     // const float angle_offset = -M_PI / 37.5f;
     // const float angle_offset = -M_PI / 42.0f;
     // const float angle_offset = -M_PI / 180.0f;
     // const float angle_offset = 0.045;
-    const float angle_offset = 0;
-    theta_des = -M_PI / 4.0f + angle_offset; // common
+
     // inverted at the edge
+    theta_des_edge = -M_PI / 4.0f;
     phi_des_edge = 0;
-    q_des_edge.q0 = cos(theta_des / 2.0f);
+    q_des_edge.q0 = cos(theta_des_edge / 2.0f);
     q_des_edge.q1 = 0.0f;
-    q_des_edge.q2 = sin(theta_des / 2.0f);
+    q_des_edge.q2 = sin(theta_des_edge / 2.0f);
     q_des_edge.q3 = 0.0f;
     // inverted at the vertex
-    phi_des_vertex = atan(1.0f / sqrt(2.0f)) + angle_offset;
-    q_des_vertex.q0 = cos(phi_des_vertex / 2.0f) * cos(theta_des / 2.0f);
-    q_des_vertex.q1 = sin(phi_des_vertex / 2.0f) * cos(theta_des / 2.0f);
-    q_des_vertex.q2 = cos(phi_des_vertex / 2.0f) * sin(theta_des / 2.0f);
-    q_des_vertex.q3 = -sin(phi_des_vertex / 2.0f) * sin(theta_des / 2.0f);
+    theta_des_vertex = -M_PI / 4.0f + 0.16;
+    phi_des_vertex = atan(1.0f / sqrt(2.0f));
+    q_des_vertex.q0 = cos(phi_des_vertex / 2.0f) * cos(theta_des_vertex / 2.0f);
+    q_des_vertex.q1 = sin(phi_des_vertex / 2.0f) * cos(theta_des_vertex / 2.0f);
+    q_des_vertex.q2 = cos(phi_des_vertex / 2.0f) * sin(theta_des_vertex / 2.0f);
+    q_des_vertex.q3 = -sin(phi_des_vertex / 2.0f) * sin(theta_des_vertex / 2.0f);
+    // q_des_vertex.q0 *= -1.0f;
+    // q_des_vertex.q1 *= -1.0f;
+    // q_des_vertex.q2 *= -1.0f;
+    // q_des_vertex.q3 *= -1.0f;
     // printf("q_des_vertex = %.3f,\t%.3f,\t%.3f,\t%.3f\t\r\n", q_des_vertex.q0, q_des_vertex.q1, q_des_vertex.q2, q_des_vertex.q3);
 
     coeff_tau_att = 2.0f / tau_att;
@@ -81,6 +104,7 @@ void InitializeController()
     arm_mat_init_f32(&mat_pinvM, 8, 3, (float32_t *)coeff_pinvM);
     arm_mat_init_f32(&mat_Tdes, 3, 1, coeff_Tdes);
     arm_mat_init_f32(&mat_Fprop, 8, 1, coeff_Fprop);
+    // arm_mat_init_f32(&mat_K_edge, 1, 2, (float32_t *)coeff_K_edge);
 
     set_defaults();
     setup_indexing();
@@ -223,201 +247,238 @@ void load_default_data(void)
     params.Q[8] = 1.0;
     params.fmin[0] = 0.0;
     params.fmax[0] = 0.049;
+    // params.fmax[0] = 0.061;
+    // f_max = kappa_f * rps_max * rps_max;
 }
 
-void TestControl(AHRS_State *ahrs)
+void UpdateControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
+{
+    // TestControl(ahrs);
+    // UpdateQuaternionControl(ahrs, motor_input, bat_vol);
+    UpdateEulerControl(ahrs, motor_input, bat_vol);
+}
+
+// void TestControl(AHRS_State *ahrs)
+// {
+//     Quaternion q_subs, q_des;
+
+//     if (inverted_mode == 0)
+//     {
+//         q_des = q_des_edge;
+//     }
+//     else if (inverted_mode == 1)
+//     {
+//         q_des = q_des_vertex;
+//     }
+
+//     q_subs.q0 = ahrs->q.q0 - q_des.q0;
+//     q_subs.q1 = ahrs->q.q1 - q_des.q1;
+//     q_subs.q2 = ahrs->q.q2 - q_des.q2;
+//     q_subs.q3 = ahrs->q.q3 - q_des.q3;
+
+//     float errorNorm = Sqrt(q_subs.q0 * q_subs.q0 + q_subs.q1 * q_subs.q1 + q_subs.q2 * q_subs.q2 + q_subs.q3 * q_subs.q3);
+//     if (errorNorm > err_threshold)
+//     {
+//         Write_GPIO(USER_LED2, 0);
+//     }
+//     else
+//     {
+//         Write_GPIO(USER_LED2, 1);
+//     }
+// }
+
+void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
 {
     Quaternion q_subs, q_des;
-    q_des = q_des_edge;
-    q_des = q_des_vertex;
+
+    if (inverted_mode == 0)
+    {
+        q_des = q_des_edge;
+    }
+    else if (inverted_mode == 1)
+    {
+        q_des = q_des_vertex;
+    }
+
     q_subs.q0 = ahrs->q.q0 - q_des.q0;
     q_subs.q1 = ahrs->q.q1 - q_des.q1;
     q_subs.q2 = ahrs->q.q2 - q_des.q2;
     q_subs.q3 = ahrs->q.q3 - q_des.q3;
-
     float errorNorm = Sqrt(q_subs.q0 * q_subs.q0 + q_subs.q1 * q_subs.q1 + q_subs.q2 * q_subs.q2 + q_subs.q3 * q_subs.q3);
-    if (errorNorm > err_threshold)
+
+    if (errorNorm < err_threshold)
     {
-        Write_GPIO(USER_LED2, 0);
+        Write_GPIO(USER_LED2, 1);
+
+        CalcInputTorqueQuaternion(ahrs, q_des);
+
+        params.tau[0] = coeff_Tdes[0];
+        params.tau[1] = coeff_Tdes[1];
+        params.tau[2] = coeff_Tdes[2];
+        // params.u[3] = coeff_Tdes[0];
+        // params.u[4] = coeff_Tdes[1];
+        // params.u[5] = coeff_Tdes[2];
+        solve();
+        for (int i = 0; i < MOTOR_NUM; i++)
+        {
+            coeff_Fprop[i] = vars.x[i];
+        }
+        // printf("objv = %10.3e\n", work.optval);
+
+        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
+        //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
+
+        // arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
+        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
+        //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
+
+        CalcMotorInput(motor_input, bat_vol);
+        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->inputs[0], motor_input->inputs[1], motor_input->inputs[2], motor_input->inputs[3],
+        //        motor_input->inputs[4], motor_input->inputs[5], motor_input->inputs[6], motor_input->inputs[7]);
     }
     else
     {
-        Write_GPIO(USER_LED2, 1);
+        Write_GPIO(USER_LED2, 0);
+        for (int i = 0; i < MOTOR_NUM; i++)
+        {
+            motor_input->inputs[i] = 0;
+        }
     }
 }
 
-void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float *bat_vol)
+void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
 {
-    Quaternion q_subs_edge, q_subs_vertex, q_des, q_conj;
+    float errorNorm = 0;
+    AxesRaw error_angle = {0, 0, 0};
+
+    if (inverted_mode == 0)
+    {
+        theta_des = theta_des_edge;
+        // theta_des = theta_des_vertex;
+        phi_des = phi_des_edge;
+        error_angle.y = theta_des - ahrs->euler.y;
+        errorNorm = Sqrt(error_angle.y * error_angle.y);
+    }
+    else if (inverted_mode == 1)
+    {
+        theta_des = theta_des_vertex;
+        phi_des = phi_des_vertex;
+        error_angle.x = phi_des - ahrs->euler.x;
+        error_angle.y = theta_des - ahrs->euler.y;
+        errorNorm = Sqrt(error_angle.x * error_angle.x + error_angle.y * error_angle.y);
+        // errorNorm = Sqrt(error_angle.x * error_angle.x);
+    }
+
+    if (errorNorm < err_threshold)
+    {
+        Write_GPIO(USER_LED2, 1);
+
+        CalcInputTorqueEuler(ahrs, &error_angle);
+
+        params.tau[0] = coeff_Tdes[0];
+        params.tau[1] = coeff_Tdes[1];
+        params.tau[2] = coeff_Tdes[2];
+        // params.u[3] = coeff_Tdes[0];
+        // params.u[4] = coeff_Tdes[1];
+        // params.u[5] = coeff_Tdes[2];
+
+        // solve();
+        // for (int i = 0; i < MOTOR_NUM; i++)
+        // {
+        //     coeff_Fprop[i] = vars.x[i];
+        // }
+        // printf("objv = %10.3e\n", work.optval);
+
+        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
+        //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
+
+        arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
+        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
+        //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
+
+        CalcMotorInput(motor_input, bat_vol);
+        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->inputs[0], motor_input->inputs[1], motor_input->inputs[2], motor_input->inputs[3],
+        //        motor_input->inputs[4], motor_input->inputs[5], motor_input->inputs[6], motor_input->inputs[7]);
+    }
+    else
+    {
+        Write_GPIO(USER_LED2, 0);
+        for (int i = 0; i < MOTOR_NUM; i++)
+        {
+            motor_input->inputs[i] = 0;
+        }
+        err_phi_sum = 0;
+        err_pitch_sum = 0;
+    }
+}
+
+void CalcInputTorqueQuaternion(AHRS_State *ahrs, Quaternion q_des)
+{
+    Quaternion q_conj;
     // Quaternion q_des_conj, q_err_conj, q_tmp1, q_tmp2;
 
-    q_subs_edge.q0 = ahrs->q.q0 - q_des_edge.q0;
-    q_subs_edge.q1 = ahrs->q.q1 - q_des_edge.q1;
-    q_subs_edge.q2 = ahrs->q.q2 - q_des_edge.q2;
-    q_subs_edge.q3 = ahrs->q.q3 - q_des_edge.q3;
+    QuaternionConj(&(ahrs->q), &q_conj);
+    QuaternionMult(&q_conj, &q_des, &q_err);
+    // printf("%.3f\t%.3f\t%.3f\t%.3f\t\r\n", q_err.q0, q_err.q1, q_err.q2, q_err.q3);
 
-    q_subs_vertex.q0 = ahrs->q.q0 - q_des_vertex.q0;
-    q_subs_vertex.q1 = ahrs->q.q1 - q_des_vertex.q1;
-    q_subs_vertex.q2 = ahrs->q.q2 - q_des_vertex.q2;
-    q_subs_vertex.q3 = ahrs->q.q3 - q_des_vertex.q3;
+    /*1. Nonlinear Attitude Control*/
+    // QuaternionConj(&q_des, &q_des_conj);
+    // QuaternionMult(&q_err, &q_des_conj, &q_tmp1);
+    // QuaternionMult(&q_tmp1, &dq_des, &q_tmp2);
+    // QuaternionConj(&q_err, &q_err_conj);
+    // QuaternionMult(&q_tmp2, &q_err_conj, &omega_ff);
 
-    float errorNorm_edge = Sqrt(q_subs_edge.q0 * q_subs_edge.q0 + q_subs_edge.q1 * q_subs_edge.q1 + q_subs_edge.q2 * q_subs_edge.q2 + q_subs_edge.q3 * q_subs_edge.q3);
-    // float errorNorm_vertex = Sqrt(q_subs_vertex.q0 * q_subs_vertex.q0 + q_subs_vertex.q1 * q_subs_vertex.q1 + q_subs_vertex.q2 * q_subs_vertex.q2 + q_subs_vertex.q3 * q_subs_vertex.q3);
-    // if (errorNorm_edge < err_threshold || errorNorm_vertex < err_threshold)
-    if (errorNorm_edge < err_threshold)
-    {
-        q_des = q_des_edge;
-        // q_des = q_des_vertex;
+    // omega_des.x = coeff_tau_att * Sign(q_err.q0) * q_err.q1 + omega_ff.q1;
+    // omega_des.y = coeff_tau_att * Sign(q_err.q0) * q_err.q2 + omega_ff.q2;
+    // omega_des.z = coeff_tau_att * Sign(q_err.q0) * q_err.q3 + omega_ff.q3;
+    omega_des.x = coeff_tau_att * Sign(q_err.q0) * q_err.q1;
+    omega_des.y = coeff_tau_att * Sign(q_err.q0) * q_err.q2;
+    omega_des.z = coeff_tau_att * Sign(q_err.q0) * q_err.q3;
+    // printf("%.3f\t%.3f\t%.3f\t\r\n", omega_des.x, omega_des.y, omega_des.z);
 
-        Write_GPIO(USER_LED2, 1);
+    coeff_Tdes[0] = coeff_J * (omega_des.x - ahrs->gx);
+    // coeff_Tdes[0] = 0;
+    coeff_Tdes[1] = coeff_J * (omega_des.y - ahrs->gy);
+    coeff_Tdes[2] = coeff_J * (omega_des.z - ahrs->gz);
+    // coeff_Tdes[2] = 0;
 
-        QuaternionConj(&(ahrs->q), &q_conj);
-        QuaternionMult(&q_conj, &q_des, &q_err);
-        // printf("%.3f\t%.3f\t%.3f\t%.3f\t\r\n", q_err.q0, q_err.q1, q_err.q2, q_err.q3);
+    /*2. Tilt-Prioritized Attitude Control*/
+    // float kp_red = 1.5;
+    // float kp_yaw = 0.3;
+    // float k_omega = 0.1;
 
-        // QuaternionConj(&q_des, &q_des_conj);
-        // QuaternionMult(&q_err, &q_des_conj, &q_tmp1);
-        // QuaternionMult(&q_tmp1, &dq_des, &q_tmp2);
-        // QuaternionConj(&q_err, &q_err_conj);
-        // QuaternionMult(&q_tmp2, &q_err_conj, &omega_ff);
-
-        // omega_des.x = coeff_tau_att * Sign(q_err.q0) * q_err.q1 + omega_ff.q1;
-        // omega_des.y = coeff_tau_att * Sign(q_err.q0) * q_err.q2 + omega_ff.q2;
-        // omega_des.z = coeff_tau_att * Sign(q_err.q0) * q_err.q3 + omega_ff.q3;
-        omega_des.x = coeff_tau_att * Sign(q_err.q0) * q_err.q1;
-        omega_des.y = coeff_tau_att * Sign(q_err.q0) * q_err.q2;
-        omega_des.z = coeff_tau_att * Sign(q_err.q0) * q_err.q3;
-        // printf("%.3f\t%.3f\t%.3f\t\r\n", omega_des.x, omega_des.y, omega_des.z);
-
-        // coeff_Tdes[0] = coeff_J * (omega_des.x - ahrs->gx);
-        coeff_Tdes[0] = 0;
-        coeff_Tdes[1] = coeff_J * (omega_des.y - ahrs->gy);
-        // coeff_Tdes[2] = coeff_J * (omega_des.z - ahrs->gz);
-        coeff_Tdes[2] = 0;
-        // arm_mat_init_f32(&mat_Tdes, 3, 1, coeff_Tdes);
-        // printf("%.3f\t%.3f\t%.3f\t\r\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2]);
-
-        params.tau[0] = coeff_Tdes[0];
-        params.tau[1] = coeff_Tdes[1];
-        params.tau[2] = coeff_Tdes[2];
-        // params.u[3] = coeff_Tdes[0];
-        // params.u[4] = coeff_Tdes[1];
-        // params.u[5] = coeff_Tdes[2];
-        solve();
-        for (int i = 0; i < MOTOR_NUM; i++)
-        {
-            coeff_Fprop[i] = vars.x[i];
-        }
-        // printf("objv = %10.3e\n", work.optval);
-
-        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
-        //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
-
-        // arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
-        //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
-
-        CalcMotorInput(motor_input, bat_vol);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->inputs[0], motor_input->inputs[1], motor_input->inputs[2], motor_input->inputs[3],
-        //        motor_input->inputs[4], motor_input->inputs[5], motor_input->inputs[6], motor_input->inputs[7]);
-    }
-    else if (errorNorm_edge > err_threshold)
-    {
-        Write_GPIO(USER_LED2, 0);
-        for (int i = 0; i < MOTOR_NUM; i++)
-        {
-            motor_input->inputs[i] = 0;
-        }
-    }
+    // float coeff_q03 = invSqrt(q_err.q0 * q_err.q0 + q_err.q3 * q_err.q3);
+    // coeff_Tdes[0] = coeff_J * (kp_red * coeff_q03 * (q_err.q0 * q_err.q1 - q_err.q2 * q_err.q3) + k_omega * (omega_des.x - ahrs->gx));
+    // coeff_Tdes[1] = coeff_J * (kp_red * coeff_q03 * (q_err.q0 * q_err.q2 + q_err.q1 * q_err.q3) + k_omega * (omega_des.y - ahrs->gy));
+    // coeff_Tdes[2] = coeff_J * (kp_yaw * coeff_q03 * Sign(q_err.q0) * q_err.q3 + k_omega * (omega_des.z - ahrs->gz));
 }
 
-void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float *bat_vol)
+void CalcInputTorqueEuler(AHRS_State *ahrs, AxesRaw *error_angle)
 {
-    // edge
-    phi_des_edge = 0;
-    // vertex
-    // phi_des_vertex = 0.755;
-    // theta_des = -0.584;
+    /*PID Control (edge only)*/
+    // // edge
+    // float kp = 1.5;
+    // // float ki = 0.001f;
+    // float ki = 0.0;
+    // float kd = 0.8;
 
-    err_threshold = 0.1;
-    AxesRaw euler_angle;
-    AxesRaw error_angle = {0, 0, 0};
-    static float err_phi_sum = 0;
-    static float err_pitch_sum = 0;
-    euler_angle.x = atan2(2.0f * (ahrs->q.q0 * ahrs->q.q1 + ahrs->q.q2 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 - ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 + ahrs->q.q3 * ahrs->q.q3);
-    euler_angle.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 - ahrs->q.q1 * ahrs->q.q3));
-    euler_angle.z = atan2(2.0f * (ahrs->q.q1 * ahrs->q.q2 + ahrs->q.q0 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 + ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 - ahrs->q.q3 * ahrs->q.q3);
+    // err_phi_sum += error_angle->x;
+    // err_pitch_sum += error_angle->y;
+    // // coeff_Tdes[0] = kp * error_angle.x + kd * (-ahrs->gx);
+    // coeff_Tdes[0] = kp * error_angle->x + ki * err_phi_sum + kd * (-ahrs->gx);
+    // // coeff_Tdes[0] = 0;
+    // coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
+    // // coeff_Tdes[2] = kp * error_angle.z + kd * (-ahrs->gz);
+    // coeff_Tdes[2] = 0;
 
-    error_angle.y = theta_des - euler_angle.y;
-
-    // float errorNorm_edge = Sqrt(error_angle.y * error_angle.y);
-    float errorNorm_edge = Sqrt(error_angle.y * error_angle.y);
-    // float errorNorm_vertex = Sqrt(q_subs_vertex.q0 * q_subs_vertex.q0 + q_subs_vertex.q1 * q_subs_vertex.q1 + q_subs_vertex.q2 * q_subs_vertex.q2 + q_subs_vertex.q3 * q_subs_vertex.q3);
-    // if (errorNorm_edge < err_threshold || errorNorm_vertex < err_threshold)
-    if (errorNorm_edge < err_threshold)
-    // if (errorNorm_vertex < err_threshold)
-    {
-        Write_GPIO(USER_LED2, 1);
-
-        // edge
-        float kp = 1.5;
-        float ki = 0.001f;
-        // float ki = 0;
-        float kd = 0.8;
-
-        // vertex
-        // float kp = 2.5;
-        // float ki = 0;
-        // float kd = 0.8;
-
-        err_phi_sum += error_angle.x;
-        err_pitch_sum += error_angle.y;
-        // coeff_Tdes[0] = kp * error_angle.x + kd * (-ahrs->gx);
-        // coeff_Tdes[0] = kp * error_angle.x + ki * err_phi_sum + kd * (-ahrs->gx);
-        coeff_Tdes[0] = 0;
-        coeff_Tdes[1] = kp * error_angle.y + ki * err_pitch_sum + kd * (-ahrs->gy);
-        // coeff_Tdes[2] = kp * error_angle.z + kd * (-ahrs->gz);
-        coeff_Tdes[2] = 0;
-        // arm_mat_init_f32(&mat_Tdes, 3, 1, coeff_Tdes);
-        // printf("%.3f\t%.3f\t%.3f\t\r\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2]);
-
-        params.tau[0] = coeff_Tdes[0];
-        params.tau[1] = coeff_Tdes[1];
-        params.tau[2] = coeff_Tdes[2];
-        // params.u[3] = coeff_Tdes[0];
-        // params.u[4] = coeff_Tdes[1];
-        // params.u[5] = coeff_Tdes[2];
-        solve();
-        for (int i = 0; i < MOTOR_NUM; i++)
-        {
-            coeff_Fprop[i] = vars.x[i];
-        }
-        // printf("objv = %10.3e\n", work.optval);
-
-        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
-        //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
-
-        // arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
-        //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
-
-        CalcMotorInput(motor_input, bat_vol);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->inputs[0], motor_input->inputs[1], motor_input->inputs[2], motor_input->inputs[3],
-        //        motor_input->inputs[4], motor_input->inputs[5], motor_input->inputs[6], motor_input->inputs[7]);
-    }
-    else if (errorNorm_edge > err_threshold)
-    // else if (errorNorm_vertex > err_threshold)
-    {
-        err_pitch_sum = 0;
-        Write_GPIO(USER_LED2, 0);
-        for (int i = 0; i < MOTOR_NUM; i++)
-        {
-            motor_input->inputs[i] = 0;
-        }
-    }
+    /*Optimal Control*/
+    float coeff_x[2] = {-error_angle->y, ahrs->gy};
+    // arm_mat_init_f32(&mat_x, 2, 1, coeff_x);
+    coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
+    // coeff_Tdes[1] *= -1;
 }
 
-void CalcMotorInput(MotorInput *motor_input, float *bat_vol)
+void CalcMotorInput(MotorInput *motor_input, float bat_vol)
 {
     // calculate input velocity
     CalcInputVelocity(motor_input);
@@ -461,10 +522,10 @@ void CalcInputVoltage(MotorInput *motor_input)
     }
 }
 
-void Voltage2Duty(MotorInput *motor_input, float *bat_vol)
+void Voltage2Duty(MotorInput *motor_input, float bat_vol)
 {
     for (int i = 0; i < MOTOR_NUM; i++)
     {
-        motor_input->inputs[i] = (float)(MOTOR_MAX_PWM_VALUE)*motor_input->inputs[i] / (*bat_vol);
+        motor_input->inputs[i] = (float)(MOTOR_MAX_PWM_VALUE)*motor_input->inputs[i] / (bat_vol);
     }
 }
