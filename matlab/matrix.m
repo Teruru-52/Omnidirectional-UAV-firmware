@@ -17,9 +17,25 @@ a = 1 / 2 + 1 / sqrt(12);
 b = 1 / 2 - 1 / sqrt(12);
 c = 1 / sqrt(3);
 
+% default
 X = [-a b -b a a -b b -a;
         b a -a -b -b -a a b;
         c -c -c c c -c -c c]
+
+% reverse 1-4 directions
+% X = [a -b b -a a -b b -a;
+%         -b -a a b -b -a a b;
+%         -c c c -c c -c -c c];
+
+% reverse 5-8 directions
+% X = [-a b -b a -a b -b a;
+%         b a -a -b b a -a -b;
+%         c -c -c c -c c c -c]
+
+% X = [a -b b -a;
+%        -b -a a b;
+%         c -c -c c];
+% P = P(:, 5:8);
 
 % control allocation matrix
 % the torque induced by the aerodynamic drag of the propeller is omitted

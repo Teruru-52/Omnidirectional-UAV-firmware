@@ -72,20 +72,22 @@ end
 
 figure(1);
 subplot(1, 2, 1);
-plot(q0_des, 'LineWidth', 5);
+plot(q0_des, 'LineWidth', 4);
 hold on;
-plot(q1_des, 'LineWidth', 5);
-plot(q2_des, 'LineWidth', 5);
-plot(q3_des, 'LineWidth', 5);
+plot(q1_des, 'LineWidth', 4);
+plot(q2_des, 'LineWidth', 4);
+plot(q3_des, 'LineWidth', 4);
 grid on;
 
 legend('$q_0$', '$q_1$', '$q_2$', '$q_3$', 'Interpreter', 'latex', 'Location', 'northeast')
 % legend('$q_0$', '$q_1$', '$q_2$', '$q_3$', 'Interpreter', 'latex', 'Location', 'best')
 xlim([0 length(q0_des)])
 h_axes = gca;
-h_axes.XAxis.FontSize = 25;
-h_axes.YAxis.FontSize = 25;
-set(legend, 'FontSize', 35);
+h_axes.XAxis.FontSize = 20;
+h_axes.YAxis.FontSize = 20;
+xlabel("time [ms]",  'Interpreter', 'latex');
+ylabel("quaternion",  'Interpreter', 'latex');
+set(gca, "FontName", "Times New Roman", "FontSize", 25);
 
 subplot(1, 2, 2);
 plot(roll, 'LineWidth', 2);
@@ -99,7 +101,7 @@ xlim([0 length(q0_des)])
 h_axes = gca;
 h_axes.XAxis.FontSize = 15;
 h_axes.YAxis.FontSize = 15;
-set(legend, 'FontSize', 20);
+set(gca, "FontName", "Times New Roman", "FontSize", 20);
 %% method2
 step = 0.01;
 
@@ -157,7 +159,7 @@ xlim([0 length(q0_des)])
 h_axes = gca;
 h_axes.XAxis.FontSize = 15;
 h_axes.YAxis.FontSize = 15;
-set(legend, 'FontSize', 20);
+set(gca, "FontName", "Times New Roman", "FontSize", 20);
 
 subplot(1, 2, 2);
 plot(roll, 'LineWidth', 2);
@@ -166,9 +168,9 @@ plot(pitch, 'LineWidth', 2);
 plot(yaw, 'LineWidth', 2);
 grid on;
 
-legend('$\phi$', '$\theta$', '$\psi$', 'Interpreter', 'latex', 'Location', 'best')
+legend('$\phi$ (roll)', '$\theta$ (pitch)', '$\psi$ (yaw)', 'Interpreter', 'latex', 'Location', 'best')
 xlim([0 length(q0_des)])
 h_axes = gca;
 h_axes.XAxis.FontSize = 15;
 h_axes.YAxis.FontSize = 15;
-set(legend, 'FontSize', 20);
+set(gca, "FontName", "Times New Roman", "FontSize", 20);
