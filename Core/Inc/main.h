@@ -38,12 +38,13 @@ extern "C" {
 #include <math.h>
 #include "arm_math.h"
 
+#include "cmsis_os.h"
 #include "adc.h"
+#include "dma.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-#include "dma.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

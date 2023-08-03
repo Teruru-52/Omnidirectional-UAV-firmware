@@ -49,7 +49,7 @@ extern TIM_HandleTypeDef htim9;
 extern TIM_HandleTypeDef htim12;
 
 /* USER CODE BEGIN Private defines */
-  #define MOTOR_MAX_PWM_VALUE 999.0f
+#define MOTOR_MAX_PWM_VALUE 999.0f
 #define MOTOR_UPPER_PWM_VALUE 270.0f
 /* USER CODE END Private defines */
 
@@ -73,7 +73,6 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
     uint32_t CHANNEL_2;
   } Motor;
 
-  void Base_TIM_Init(void);
   void Motor_TIM_Init(void);
   void Speaker_TIM_Init(void);
   void PWM_Start(Motor *motor);
