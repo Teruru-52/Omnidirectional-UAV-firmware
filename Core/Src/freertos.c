@@ -169,10 +169,12 @@ void StartDefaultTask(void const *argument)
         Write_GPIO(USER_LED3, 0);
       }
 
+      float duty = 200;
       // HAL_Delay(2000);
       // PWM_Update(&motor1, duty);
-      // PWM_Update(&motor2, duty);
+      PWM_Update(&motor2, duty);
       // PWM_Update(&motor3, duty);
+      PWM_Update(&motor4, duty);
       // PWM_Update(&motor5, duty);
       // PWM_Update(&motor6, duty);
       // PWM_Update(&motor7, duty);
@@ -180,23 +182,23 @@ void StartDefaultTask(void const *argument)
       // HAL_Delay(2000);
     }
 
-    if (rdUart(&rdData) == TRUE)
-    {
-      SdBuff[rcvLength++] = rdData;
-      if ((rdData == CHAR_LF) || (rcvLength >= SND_BUFF_SIZE))
-      {
-        HAL_UART_Transmit(&huart1, SdBuff, rcvLength, 0xFFFF);
-        if (Compare_Stop(SdBuff) == TRUE)
-        {
-          Write_GPIO(USER_LED2, 1);
-        }
-        else
-        {
-          Write_GPIO(USER_LED2, 0);
-        }
-        rcvLength = 0;
-      }
-    }
+    // if (rdUart(&rdData) == TRUE)
+    // {
+    //   SdBuff[rcvLength++] = rdData;
+    //   if ((rdData == CHAR_LF) || (rcvLength >= SND_BUFF_SIZE))
+    //   {
+    //     HAL_UART_Transmit(&huart1, SdBuff, rcvLength, 0xFFFF);
+    //     if (Compare_Stop(SdBuff) == TRUE)
+    //     {
+    //       Write_GPIO(USER_LED2, 1);
+    //     }
+    //     else
+    //     {
+    //       Write_GPIO(USER_LED2, 0);
+    //     }
+    //     rcvLength = 0;
+    //   }
+    // }
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -252,7 +254,7 @@ void StartLogTask(void const *argument)
   for (;;)
   {
     osSemaphoreWait(LogSemaphoreHandle, osWaitForever);
-    printf("%.3f\r\n", ahrs.euler.x);
+    printf("%.3f\r\n", ahrs.euler.y);
     // printf("%.3f\r\n", -atan2(acc.y, -acc.z));
     // printf("%.3f\t%.3f\t%.3f\r\n", ahrs.euler.x, ahrs.euler.y, ahrs.euler.z);
 

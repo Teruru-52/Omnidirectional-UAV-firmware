@@ -67,7 +67,10 @@ const float32_t coeff_pinvM[24] = {
 // const float32_t coeff_K_edge[2] = {-0.5598, -0.2159};
 
 // Q = diag([100, 1]), R = 1
-const float32_t coeff_K_edge[2] = {-1.8322, -0.2098};
+// const float32_t coeff_K_edge[2] = {-1.8322, -0.2098};
+
+// Q = diag([10000, 100]), R = 1
+const float32_t coeff_K_edge[2] = {-1.9441, -0.2211};
 
 void InitializeController()
 {

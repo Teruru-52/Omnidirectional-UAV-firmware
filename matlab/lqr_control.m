@@ -89,7 +89,7 @@ V = ctrb(A, B);
 rank(V)
 
 % edge 
-Q = diag([100, 1]);
+Q = diag([10000, 100]);
 R = [1];
 
 A = [                   0, 1;
