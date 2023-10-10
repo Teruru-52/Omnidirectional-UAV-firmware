@@ -15,9 +15,9 @@
 
 typedef struct
 {
-    // float input1, input2, input3, input4;
-    // float input5, input6, input7, input8;
-    float inputs[8];
+    float voltage[8];
+    float velocity[8];
+    float duty[8];
 } MotorInput;
 
 void DriveMotor(Motor *motor1, Motor *motor2, Motor *motor3, Motor *motor4,

@@ -17,7 +17,7 @@
 arm_matrix_instance_f32 mat_pinvM;
 arm_matrix_instance_f32 mat_Tdes;
 arm_matrix_instance_f32 mat_Fprop;
-arm_matrix_instance_f32 mat_K_edge;
+arm_matrix_instance_f32 mat_K_vertex;
 arm_matrix_instance_f32 mat_x;
 
 float coeff_Tdes[3];

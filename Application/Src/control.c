@@ -25,10 +25,18 @@ AxesRaw omega_des;
 const float J = 0.0017f;
 const float tau_att = 0.1f;
 const float tau_omega = 0.1f;
-const float kappa_f = 1e-6f;
+// const float kappa_f = 1e-6f;
+// const float kappa_f = 2.41e-7f;
+// const float kappa_f = 4e-7f;
+// const float kappa_f = 1e-5f;
+const float kappa_f = 1e-5f;
 const float param_rps2voltage[5] = {2.1967e-09, -1.1731e-6, 2.3771e-04, -0.0136, 0.5331};
 const float rps_max = 248.333f;
-const float err_threshold = 0.1;
+const float start_threshold_edge = 0.01;
+const float start_threshold_vertex = 0.05;
+bool start_flag = false;
+const float err_threshold_edge = 0.1;
+const float err_threshold_vertex = 0.25;
 float coeff_tau_att, coeff_tau_omega, coeff_kappa_f;
 float coeff_J;
 float theta_des, theta_des_edge, theta_des_vertex;
@@ -60,17 +68,70 @@ const float32_t coeff_pinvM[24] = {
     0.2567f, -0.9582f, 0.7014f};
 
 // feedback matrix
+// Q = diag([10, 1]), R = 1
+// const float32_t coeff_K_edge[2] = {-0.5271, -0.2054};
+
 // Q = diag([10, 10]), R = 1
 // const float32_t coeff_K_edge[2] = {-0.1059, -0.2146};
 
 // Q = diag([100, 10]), R = 1
 // const float32_t coeff_K_edge[2] = {-0.5598, -0.2159};
 
+// Q = diag([100, 10]), R = 10
+// const float32_t coeff_K_edge[2] = {-0.5271, -0.2054};
+
 // Q = diag([100, 1]), R = 1
 // const float32_t coeff_K_edge[2] = {-1.8322, -0.2098};
 
+// Q = diag([200, 10]), R = 1
+// const float32_t coeff_K_edge[2] = {-0.8300, -0.2167};
+
+// Q = diag([250, 10]), R = 2.5
+// const float32_t coeff_K_edge[2] = {-1.6061, -0.1870};
+
+// Q = diag([250, 10]), R = 1
+const float32_t coeff_K_edge[2] = {-0.9380, -0.2170};
+
+// Q = diag([350, 10]), R = 1
+// const float32_t coeff_K_edge[2] = {-1.1239, -0.2176};
+
+// Q = diag([400, 10]), R = 1
+// const float32_t coeff_K_edge[2] = {-1.2063, -0.2178};
+
+// Q = diag([500, 10]), R = 1
+// const float32_t coeff_K_edge[2] = {-1.3560, -0.2182};
+
+// Q = diag([1000, 10]), R = 1
+// const float32_t coeff_K_edge[2] = {-1.9326, -0.2199};
+
 // Q = diag([10000, 100]), R = 1
-const float32_t coeff_K_edge[2] = {-1.9441, -0.2211};
+// const float32_t coeff_K_edge[2] = {-1.9441, -0.2211};
+
+// with yaw
+// Q = diag([10, 10, 10, 10, 10, 10]), R = diag([1, 1, 1]);
+// const float32_t coeff_K_vertex[18] = {
+//     -0.1840, -0.0749, 0.0820, -0.2147, -0.0003, -0.0000,
+//     -0.0158, -0.0767, -0.1134, -0.0000, -0.2147, -0.0003,
+//     -0.1099, 0.1004, -0.1603, -0.0003, -0.0003, -0.2152};
+
+// without yaw
+// Q = diag([100, 100, 10, 10, 10]), R = diag([1, 1, 1]);
+// const float32_t coeff_K_vertex[15] = {
+//     -0.4557, -0.0747, -0.2155, -0.0009, -0.0010,
+//     -0.2396, -0.4472, -0.0007, -0.2157, 0.0002,
+//     -0.4261, 0.3624, -0.0013, 0.0002, -0.2158};
+
+// Q = diag([250, 250, 10, 10, 10]), R = diag([1, 1, 1]);
+const float32_t coeff_K_vertex[15] = {
+    -0.7185, -0.0745, -0.2163, -0.0014, -0.0016,
+    -0.3914, -0.7561, -0.0012, -0.2167, 0.0004,
+    -0.6406, 0.5806, -0.0019, 0.0003, -0.2167};
+
+// Q = diag([1000, 1000, 10, 10, 10]), R = diag([1, 1, 1]);
+// const float32_t coeff_K_vertex[15] = {
+//     -1.4002, -0.0741, -0.2183, -0.0026, -0.0033,
+//     -0.7851, -1.5683, -0.0023, -0.2194, 0.0008,
+//     -1.1968, 1.1546, -0.0035, 0.0008, -0.2190};
 
 void InitializeController()
 {
@@ -87,8 +148,12 @@ void InitializeController()
     q_des_edge.q2 = sin(theta_des_edge / 2.0f);
     q_des_edge.q3 = 0.0f;
     // inverted at the vertex
-    theta_des_vertex = -M_PI / 4.0f + 0.16;
-    phi_des_vertex = atan(1.0f / sqrt(2.0f));
+    // Complimentary Filter
+    // theta_des_vertex = -M_PI / 4.0f + 0.16;
+    // phi_des_vertex = atan(1.0f / sqrt(2.0f));
+    // Madgwick Filter
+    theta_des_vertex = -M_PI / 4.0f + 0.25;
+    phi_des_vertex = atan2(1.0f, sqrt(2.0f)) + 0.16;
     q_des_vertex.q0 = cos(phi_des_vertex / 2.0f) * cos(theta_des_vertex / 2.0f);
     q_des_vertex.q1 = sin(phi_des_vertex / 2.0f) * cos(theta_des_vertex / 2.0f);
     q_des_vertex.q2 = cos(phi_des_vertex / 2.0f) * sin(theta_des_vertex / 2.0f);
@@ -107,7 +172,8 @@ void InitializeController()
     arm_mat_init_f32(&mat_pinvM, 8, 3, (float32_t *)coeff_pinvM);
     arm_mat_init_f32(&mat_Tdes, 3, 1, coeff_Tdes);
     arm_mat_init_f32(&mat_Fprop, 8, 1, coeff_Fprop);
-    // arm_mat_init_f32(&mat_K_edge, 1, 2, (float32_t *)coeff_K_edge);
+    // arm_mat_init_f32(&mat_K_vertex, 3, 6, (float32_t *)coeff_K_vertex);
+    arm_mat_init_f32(&mat_K_vertex, 3, 5, (float32_t *)coeff_K_vertex);
 
     set_defaults();
     setup_indexing();
@@ -249,9 +315,10 @@ void load_default_data(void)
     params.Q[5] = 0;
     params.Q[8] = 1.0;
     params.fmin[0] = 0.0;
-    params.fmax[0] = 0.049;
-    // params.fmax[0] = 0.061;
-    // f_max = kappa_f * rps_max * rps_max;
+    // params.fmax[0] = 0.049 * 9.81;
+    // params.fmax[0] = 0.06 * 9.81;
+    // params.fmax[0] = 0.1 * 9.81;
+    params.fmax[0] = kappa_f * rps_max * rps_max;
 }
 
 void UpdateControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
@@ -309,7 +376,7 @@ void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float ba
     q_subs.q3 = ahrs->q.q3 - q_des.q3;
     float errorNorm = Sqrt(q_subs.q0 * q_subs.q0 + q_subs.q1 * q_subs.q1 + q_subs.q2 * q_subs.q2 + q_subs.q3 * q_subs.q3);
 
-    if (errorNorm < err_threshold)
+    if (errorNorm < err_threshold_edge)
     {
         Write_GPIO(USER_LED2, 1);
 
@@ -336,15 +403,15 @@ void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float ba
         //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
 
         CalcMotorInput(motor_input, bat_vol);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->inputs[0], motor_input->inputs[1], motor_input->inputs[2], motor_input->inputs[3],
-        //        motor_input->inputs[4], motor_input->inputs[5], motor_input->inputs[6], motor_input->inputs[7]);
+        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->duty[0], motor_input->duty[1], motor_input->duty[2], motor_input->duty[3],
+        //        motor_input->duty[4], motor_input->duty[5], motor_input->duty[6], motor_input->duty[7]);
     }
     else
     {
         Write_GPIO(USER_LED2, 0);
         for (int i = 0; i < MOTOR_NUM; i++)
         {
-            motor_input->inputs[i] = 0;
+            motor_input->duty[i] = 0;
         }
     }
 }
@@ -352,6 +419,7 @@ void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float ba
 void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
 {
     float errorNorm = 0;
+    float start_threshold, err_threshold;
     AxesRaw error_angle = {0, 0, 0};
 
     if (inverted_mode == 0)
@@ -361,6 +429,8 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
         phi_des = phi_des_edge;
         error_angle.y = theta_des - ahrs->euler.y;
         errorNorm = Sqrt(error_angle.y * error_angle.y);
+        start_threshold = start_threshold_edge;
+        err_threshold = err_threshold_edge;
     }
     else if (inverted_mode == 1)
     {
@@ -370,48 +440,66 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
         error_angle.y = theta_des - ahrs->euler.y;
         errorNorm = Sqrt(error_angle.x * error_angle.x + error_angle.y * error_angle.y);
         // errorNorm = Sqrt(error_angle.x * error_angle.x);
+        start_threshold = start_threshold_vertex;
+        err_threshold = err_threshold_vertex;
     }
 
-    if (errorNorm < err_threshold)
+    if (errorNorm < start_threshold)
     {
-        Write_GPIO(USER_LED2, 1);
+        start_flag = true;
+    }
 
-        CalcInputTorqueEuler(ahrs, &error_angle);
+    if (start_flag)
+    {
+        if (errorNorm < err_threshold)
+        {
+            Write_GPIO(USER_LED2, 1);
 
-        params.tau[0] = coeff_Tdes[0];
-        params.tau[1] = coeff_Tdes[1];
-        params.tau[2] = coeff_Tdes[2];
-        // params.u[3] = coeff_Tdes[0];
-        // params.u[4] = coeff_Tdes[1];
-        // params.u[5] = coeff_Tdes[2];
+            CalcInputTorqueEuler(ahrs, &error_angle);
 
-        // solve();
-        // for (int i = 0; i < MOTOR_NUM; i++)
-        // {
-        //     coeff_Fprop[i] = vars.x[i];
-        // }
-        // printf("objv = %10.3e\n", work.optval);
+            params.tau[0] = coeff_Tdes[0];
+            params.tau[1] = coeff_Tdes[1];
+            params.tau[2] = coeff_Tdes[2];
+            // params.u[3] = coeff_Tdes[0];
+            // params.u[4] = coeff_Tdes[1];
+            // params.u[5] = coeff_Tdes[2];
 
-        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
-        //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
+            solve();
+            for (int i = 0; i < MOTOR_NUM; i++)
+            {
+                coeff_Fprop[i] = vars.x[i];
+            }
+            // printf("objv = %10.3e\n", work.optval);
 
-        arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
-        //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
+            // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
+            //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
 
-        CalcMotorInput(motor_input, bat_vol);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->inputs[0], motor_input->inputs[1], motor_input->inputs[2], motor_input->inputs[3],
-        //        motor_input->inputs[4], motor_input->inputs[5], motor_input->inputs[6], motor_input->inputs[7]);
+            // arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
+            // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
+            //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
+
+            CalcMotorInput(motor_input, bat_vol);
+            // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->duty[0], motor_input->duty[1], motor_input->duty[2], motor_input->duty[3],
+            //        motor_input->duty[4], motor_input->duty[5], motor_input->duty[6], motor_input->duty[7]);
+        }
+        else
+        {
+            Write_GPIO(USER_LED2, 0);
+            for (int i = 0; i < MOTOR_NUM; i++)
+            {
+                motor_input->duty[i] = 0;
+            }
+            err_phi_sum = 0;
+            err_pitch_sum = 0;
+            start_flag = false;
+        }
     }
     else
     {
-        Write_GPIO(USER_LED2, 0);
         for (int i = 0; i < MOTOR_NUM; i++)
         {
-            motor_input->inputs[i] = 0;
+            motor_input->duty[i] = 0;
         }
-        err_phi_sum = 0;
-        err_pitch_sum = 0;
     }
 }
 
@@ -458,27 +546,47 @@ void CalcInputTorqueQuaternion(AHRS_State *ahrs, Quaternion q_des)
 
 void CalcInputTorqueEuler(AHRS_State *ahrs, AxesRaw *error_angle)
 {
-    /*PID Control (edge only)*/
-    // // edge
-    // float kp = 1.5;
-    // // float ki = 0.001f;
-    // float ki = 0.0;
-    // float kd = 0.8;
+    if (inverted_mode == 0)
+    {
+        /*PID Control (edge only)*/
+        float kp = 2.0;
+        float ki = 0.01f;
+        float kd = 1.3;
 
-    // err_phi_sum += error_angle->x;
-    // err_pitch_sum += error_angle->y;
-    // // coeff_Tdes[0] = kp * error_angle.x + kd * (-ahrs->gx);
-    // coeff_Tdes[0] = kp * error_angle->x + ki * err_phi_sum + kd * (-ahrs->gx);
-    // // coeff_Tdes[0] = 0;
-    // coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
-    // // coeff_Tdes[2] = kp * error_angle.z + kd * (-ahrs->gz);
-    // coeff_Tdes[2] = 0;
+        err_pitch_sum += error_angle->y;
+        coeff_Tdes[0] = 0;
+        coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
+        coeff_Tdes[2] = 0;
 
-    /*Optimal Control*/
-    float coeff_x[2] = {-error_angle->y, ahrs->gy};
-    // arm_mat_init_f32(&mat_x, 2, 1, coeff_x);
-    coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
-    // coeff_Tdes[1] *= -1;
+        /*LQR*/
+        // float coeff_x[2] = {-error_angle->y, ahrs->gy};
+        // coeff_Tdes[0] = 0;
+        // coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
+        // coeff_Tdes[2] = 0;
+    }
+    else if (inverted_mode == 1)
+    {
+        /*PID Control (edge only)*/
+        // float kp = 2.5;
+        // float ki = 0.0f;
+        // float kd = 0.8;
+
+        // err_phi_sum += error_angle->x;
+        // err_pitch_sum += error_angle->y;
+        // coeff_Tdes[0] = kp * error_angle->x + ki * err_phi_sum + kd * (-ahrs->gx);
+        // coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
+        // coeff_Tdes[2] = 0;
+        // // coeff_Tdes[2] = kp * error_angle.z + kd * (-ahrs->gz);
+
+        /*LQR*/
+        // float coeff_x[6] = {-error_angle->x, -error_angle->y, -error_angle->z, ahrs->gx, ahrs->gy, ahrs->gz};
+        // arm_mat_init_f32(&mat_x, 6, 1, coeff_x);
+        // arm_mat_mult_f32(&mat_K_vertex, &mat_x, &mat_Tdes);
+
+        float coeff_x[5] = {-error_angle->x, -error_angle->y, ahrs->gx, ahrs->gy, ahrs->gz};
+        arm_mat_init_f32(&mat_x, 5, 1, coeff_x);
+        arm_mat_mult_f32(&mat_K_vertex, &mat_x, &mat_Tdes);
+    }
 }
 
 void CalcMotorInput(MotorInput *motor_input, float bat_vol)
@@ -500,11 +608,11 @@ void CalcInputVelocity(MotorInput *motor_input)
     {
         if (coeff_Fprop[i] < 0)
         {
-            motor_input->inputs[i] = 0.0;
+            motor_input->velocity[i] = 0.0;
         }
         else
         {
-            motor_input->inputs[i] = Sqrt(coeff_kappa_f * coeff_Fprop[i]);
+            motor_input->velocity[i] = Sqrt(coeff_kappa_f * coeff_Fprop[i]);
         }
     }
 }
@@ -513,14 +621,15 @@ void CalcInputVoltage(MotorInput *motor_input)
 {
     for (int i = 0; i < MOTOR_NUM; i++)
     {
-        if (motor_input->inputs[i] < 0)
+        if (motor_input->velocity[i] < 0)
         {
-            motor_input->inputs[i] = 0.0;
+            motor_input->voltage[i] = 0.0;
         }
         else
         {
-            float rps = motor_input->inputs[i];
-            motor_input->inputs[i] = param_rps2voltage[0] * (rps * rps * rps * rps) + param_rps2voltage[1] * (rps * rps * rps) + param_rps2voltage[2] * (rps * rps) + param_rps2voltage[3] * rps + param_rps2voltage[4];
+            float rps = motor_input->velocity[i];
+            // motor_input->voltage[i] = param_rps2voltage[0] * (rps * rps * rps * rps) + param_rps2voltage[1] * (rps * rps * rps) + param_rps2voltage[2] * (rps * rps) + param_rps2voltage[3] * rps + param_rps2voltage[4];
+            motor_input->voltage[i] = param_rps2voltage[0] * pow(rps, 4) + param_rps2voltage[1] * pow(rps, 3) + param_rps2voltage[2] * pow(rps, 2) + param_rps2voltage[3] * rps + param_rps2voltage[4];
         }
     }
 }
@@ -529,6 +638,6 @@ void Voltage2Duty(MotorInput *motor_input, float bat_vol)
 {
     for (int i = 0; i < MOTOR_NUM; i++)
     {
-        motor_input->inputs[i] = (float)(MOTOR_MAX_PWM_VALUE)*motor_input->inputs[i] / (bat_vol);
+        motor_input->duty[i] = (float)(MOTOR_MAX_PWM_VALUE)*motor_input->voltage[i] / (bat_vol);
     }
 }

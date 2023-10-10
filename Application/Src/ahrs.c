@@ -55,6 +55,11 @@ void InitializeAHRS(AHRS_State *ahrs)
     ahrs->gy_offset = 0.0f;
     ahrs->gz_offset = 0.0f;
 
+    roll_filt = 0;
+    pitch_filt = 0;
+    yaw_filt = 0;
+    kappa = 0.9f;
+
     dt = 0.01f;
     half_dt = dt * 0.5f;
     beta = 0.05f;
@@ -106,11 +111,6 @@ void InitializeAHRS(AHRS_State *ahrs)
     // arm_mat_init_f32(&mat_GtransCbarP, 7, 7, coeff_GtransCbarP);
 
     InitializeKalmanFilter();
-
-    roll_filt = 0;
-    pitch_filt = 0;
-    yaw_filt = 0;
-    kappa = 0.8f;
 }
 
 // void TestMatrix()
@@ -152,8 +152,8 @@ void UpdateAHRS(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
     // UpdateMadgwickFilter(acc, gyro, mag, ahrs);
     // UpdateMadgwickFilterIMU(acc, gyro, ahrs);
     // UpdateEKF(acc, gyro, mag, ahrs);
-    // UpdateKF(acc, gyro, ahrs);
-    UpdateComplimentaryFilter(acc, gyro, mag, ahrs);
+    UpdateKF(acc, gyro, ahrs);
+    // UpdateComplimentaryFilter(acc, gyro, mag, ahrs);
 }
 
 void UpdateMadgwickFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
@@ -575,7 +575,7 @@ void UpdateComplimentaryFilter(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_S
 void Convertq2Euler(AHRS_State *ahrs)
 {
     // ZYX Euler
-    ahrs->euler.x = -atan2(2.0f * (-ahrs->q.q0 * ahrs->q.q1 + ahrs->q.q2 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 - ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 + ahrs->q.q3 * ahrs->q.q3);
+    ahrs->euler.x = atan2(2.0f * (ahrs->q.q0 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 - ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 + ahrs->q.q3 * ahrs->q.q3);
     ahrs->euler.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 + ahrs->q.q1 * ahrs->q.q3));
     ahrs->euler.z = -atan2(2.0f * (ahrs->q.q1 * ahrs->q.q2 - ahrs->q.q0 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 + ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 - ahrs->q.q3 * ahrs->q.q3);
 

@@ -8,6 +8,7 @@
             "request": "launch",
             "preLaunchTask": "Omnidirectional_uav Build",
             "type": "cortex-debug",
+            "armToolchainPath": "/opt/gcc-arm-none-eabi/bin",
             "servertype": "openocd",
             "configFiles": [
                 "interface/stlink-v2-1.cfg",
