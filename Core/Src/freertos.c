@@ -172,9 +172,9 @@ void StartDefaultTask(void const *argument)
       float duty = 200;
       // HAL_Delay(2000);
       // PWM_Update(&motor1, duty);
-      PWM_Update(&motor2, duty);
+      // PWM_Update(&motor2, duty);
       // PWM_Update(&motor3, duty);
-      PWM_Update(&motor4, duty);
+      // PWM_Update(&motor4, duty);
       // PWM_Update(&motor5, duty);
       // PWM_Update(&motor6, duty);
       // PWM_Update(&motor7, duty);
@@ -227,8 +227,8 @@ void StartControlTask(void const *argument)
     if (bat_vol > bat_vol_lim)
     {
       Write_GPIO(USER_LED1, 1);
-      // DriveMotor(&motor1, &motor2, &motor3, &motor4,
-      //            &motor5, &motor6, &motor7, &motor8, &motor_input);
+      DriveMotor(&motor1, &motor2, &motor3, &motor4,
+                 &motor5, &motor6, &motor7, &motor8, &motor_input);
     }
     else
     {
