@@ -1,4 +1,5 @@
 clear all
+close all
 
 % postion matrix
 r = 0.063;

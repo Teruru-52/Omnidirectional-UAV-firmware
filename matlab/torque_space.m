@@ -21,28 +21,31 @@ vertex  = M*input';
 
 figure(1);
 subplot(3, 4, [1,2,3,5,6,7,9,10,11])
-plot_set();
+plot_set(30);
 
 subplot(3,4,4);
-plot_set();
+plot_set(20);
 view(0,90);
 
 subplot(3,4,8);
-plot_set();
+plot_set(20);
 view(0,0);
 
 subplot(3,4,12);
-plot_set();
+plot_set(20);
 view(90,0);
 
-function plot_set()
+function plot_set(fontsize)
 global vertex
 [k1,~] = convhull(vertex(1,:),vertex(2,:),vertex(3,:),'Simplify',true);
 trisurf(k1,vertex(1,:),vertex(2,:),vertex(3,:),'FaceColor','cyan','FaceAlpha',0.1,'EdgeAlpha',0.4,'DisplayName','Torque set');
 grid on;
 daspect([1 1 1]);
+xlim([-0.25 0.25]);
+ylim([-0.25 0.25]);
+zlim([-0.25 0.25]);
 xlabel('$\tau_x$ [Nm]', 'Interpreter', 'latex');
 ylabel('$\tau_y$ [Nm]', 'Interpreter', 'latex');
 zlabel('$\tau_z$ [Nm]', 'Interpreter', 'latex');
-set(gca, "FontName", "Times New Roman", "FontSize", 15);
+set(gca, "FontName", "Times New Roman", "FontSize", fontsize);
 end

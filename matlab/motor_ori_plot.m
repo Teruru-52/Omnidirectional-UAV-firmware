@@ -63,7 +63,7 @@ for i = 1:8
     text(P(1,i)+dist, P(2,i)+dist, P(3,i)+dist, text_labels(i), "FontName","Times New Roman", 'FontSize', 20);
 end
 axis equal
-legend("motor1", "motor2", "motor3", "motor4", "motor5", "motor6", "motor7", "motor8");
+% legend("motor1", "motor2", "motor3", "motor4", "motor5", "motor6", "motor7", "motor8");
 
 % corner position matrix
 C = L * 0.5  *[1 -1 1 -1 1 -1 1 -1;
