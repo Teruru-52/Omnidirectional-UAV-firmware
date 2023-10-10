@@ -22,6 +22,7 @@ arm_matrix_instance_f32 mat_x;
 
 float coeff_Tdes[3];
 float coeff_Fprop[8];
+float err_pitch_sum;
 
 void InitializeController();
 void InitializePID();

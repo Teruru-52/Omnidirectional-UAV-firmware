@@ -43,3 +43,6 @@ X = [-a b -b a a -b b -a;
 % because it is typically an order of magnitude smaller.
 M = cross(P, X)
 pinvM = pinv(M)
+
+My = M(2, :)
+pinvMy = pinv(My)

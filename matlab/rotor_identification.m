@@ -37,20 +37,20 @@ legend('data', 'fitting', 'Interpreter','latex', 'Location','southeast');
 set(gca, "FontName", "Times New Roman", "FontSize", 15);
 
 %% plot for debug
-fig_max_rps = max_rps*7;
-RPS = min_rps:0.001:fig_max_rps;
-% 4次近似
-y2 = p(1) * RPS.^4 + p(2) * RPS.^3 + p(3) * RPS.^2 + p(4) * RPS + p(5);
-
-figure(2);
-plot(rps, input,  'ro', 'MarkerSize', 8);
-hold on;
-grid on;
-plot(RPS, y2, 'b-', 'LineWidth', 2);
-hold off;
-
-ylabel('voltage [V]', 'Interpreter','latex');
-xlabel('velocity [rps]', 'Interpreter','latex');
-xlim([0 fig_max_rps]);
-legend('data', 'fitting', 'Interpreter','latex', 'Location','southeast');
-set(gca, "FontName", "Times New Roman", "FontSize", 15);
+% fig_max_rps = max_rps*7;
+% RPS = min_rps:0.001:fig_max_rps;
+% % 4次近似
+% y2 = p(1) * RPS.^4 + p(2) * RPS.^3 + p(3) * RPS.^2 + p(4) * RPS + p(5);
+% 
+% figure(2);
+% plot(rps, input,  'ro', 'MarkerSize', 8);
+% hold on;
+% grid on;
+% plot(RPS, y2, 'b-', 'LineWidth', 2);
+% hold off;
+% 
+% ylabel('voltage [V]', 'Interpreter','latex');
+% xlabel('velocity [rps]', 'Interpreter','latex');
+% xlim([0 fig_max_rps]);
+% legend('data', 'fitting', 'Interpreter','latex', 'Location','southeast');
+% set(gca, "FontName", "Times New Roman", "FontSize", 15);

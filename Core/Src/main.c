@@ -124,8 +124,8 @@ void OutputLog()
   // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\r\n", motor_input.duty[0], motor_input.duty[1], motor_input.duty[2], motor_input.duty[3],
   //        motor_input.duty[4], motor_input.duty[5], motor_input.duty[6], motor_input.duty[7]);
 
-  printf("%.3f, %.3f, %.3f, %.3f, %.3f,%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\r\n",
-         -M_PI / 4.0f - ahrs.euler.y, ahrs.gy, coeff_Tdes[1], bat_vol, motor_input.velocity[0], motor_input.velocity[1], motor_input.velocity[2], motor_input.velocity[3], motor_input.velocity[4], motor_input.velocity[5], motor_input.velocity[6], motor_input.velocity[7]);
+  printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f,%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\r\n",
+         -M_PI / 4.0f - ahrs.euler.y, ahrs.gy, err_pitch_sum, coeff_Tdes[1], bat_vol, motor_input.velocity[0], motor_input.velocity[1], motor_input.velocity[2], motor_input.velocity[3], motor_input.velocity[4], motor_input.velocity[5], motor_input.velocity[6], motor_input.velocity[7]);
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
