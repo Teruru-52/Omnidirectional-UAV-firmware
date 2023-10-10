@@ -25,11 +25,8 @@ AxesRaw omega_des;
 const float J = 0.0017f;
 const float tau_att = 0.1f;
 const float tau_omega = 0.1f;
+const float kappa_f = 8e-7f;
 // const float kappa_f = 1e-6f;
-// const float kappa_f = 2.41e-7f;
-// const float kappa_f = 4e-7f;
-// const float kappa_f = 1e-5f;
-const float kappa_f = 1e-6f;
 const float param_rps2voltage[5] = {2.1967e-09, -1.1731e-6, 2.3771e-04, -0.0136, 0.5331};
 const float rps_max = 248.333f;
 const float start_threshold_edge = 0.01;
@@ -325,10 +322,10 @@ void load_default_data(void)
     params.Q[5] = 0;
     params.Q[8] = 0.0;
     params.fmin[0] = 0.0;
-    // params.fmax[0] = 0.049 * 9.81;
+    params.fmax[0] = 0.049;
     // params.fmax[0] = 0.06 * 9.81;
     // params.fmax[0] = 0.1 * 9.81;
-    params.fmax[0] = kappa_f * rps_max * rps_max;
+    // params.fmax[0] = kappa_f * rps_max * rps_max;
 }
 
 void UpdateControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
@@ -467,18 +464,18 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
 
             CalcInputTorqueEuler(ahrs, &error_angle);
 
-            // params.tau[0] = coeff_Tdes[0];
-            // params.tau[1] = coeff_Tdes[1];
-            // params.tau[2] = coeff_Tdes[2];
+            params.tau[0] = coeff_Tdes[0];
+            params.tau[1] = coeff_Tdes[1];
+            params.tau[2] = coeff_Tdes[2];
             // params.u[3] = coeff_Tdes[0];
             // params.u[4] = coeff_Tdes[1];
             // params.u[5] = coeff_Tdes[2];
 
-            // solve();
-            // for (int i = 0; i < MOTOR_NUM; i++)
-            // {
-            //     coeff_Fprop[i] = vars.x[i];
-            // }
+            solve();
+            for (int i = 0; i < MOTOR_NUM; i++)
+            {
+                coeff_Fprop[i] = vars.x[i];
+            }
 
             // printf("objv = %10.3e\n", work.optval);
 
@@ -560,24 +557,25 @@ void CalcInputTorqueEuler(AHRS_State *ahrs, AxesRaw *error_angle)
     {
         float dt = 0.01;
         /*PID Control (edge only)*/
-        // float kp = 6.0f;
-        // float ki = 1.0f;
-        // float kd = 0.5f;
-        // float err_sum_max = 0.15;
+        // float kp = 2.3f;
+        // float ki = 0.0f;
+        // float kd = 0.4f;
+        float kp = 3.0f;
+        float ki = 0.0f;
+        float kd = 0.5f;
+        float err_sum_max = 0.1;
 
-        // err_pitch_sum += error_angle->y * dt;
-        // if (err_pitch_sum > err_sum_max)
-        //     err_pitch_sum = err_sum_max;
-        // else if (err_pitch_sum < -err_sum_max)
-        //     err_pitch_sum = -err_sum_max;
+        err_pitch_sum += error_angle->y * dt;
+        if (err_pitch_sum > err_sum_max)
+            err_pitch_sum = err_sum_max;
+        else if (err_pitch_sum < -err_sum_max)
+            err_pitch_sum = -err_sum_max;
 
-        // coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
+        coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
 
         /*LQR*/
-        float coeff_x[2] = {-error_angle->y, ahrs->gy};
-        coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
-        // if (coeff_Tdes[1] < 0)
-        //     coeff_Tdes[1] *= 0.5;
+        // float coeff_x[2] = {-error_angle->y, ahrs->gy};
+        // coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
     }
     else if (inverted_mode == 1)
     {
