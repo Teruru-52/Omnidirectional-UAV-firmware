@@ -64,7 +64,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 float bat_vol;
-const float bat_vol_lim = 7.5f; //[V]
+const float bat_vol_lim = 7.0f; //[V]
 float pressure;
 AxesRaw acc, gyro, mag;
 AHRS_State ahrs;
@@ -134,24 +134,16 @@ void OutputLog()
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  /* USER CODE BEGIN Callback 0 */
   if (htim->Instance == TIM1) // 20Hz interruption
   {
     // UpdateQuaternionControl(&ahrs, &motor_input, &bat_vol);
   }
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM6)
-  {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM12) // 100Hz interruption
   {
     ReadBatteryVoltage(&bat_vol);
     // ReadPressure(&pressure);
     ReadSensor(&acc, &gyro, &mag);
     UpdateAHRS(&acc, &gyro, &mag, &ahrs);
-
     UpdateControl(&ahrs, &motor_input, bat_vol);
 
     if (bat_vol > bat_vol_lim)
@@ -182,7 +174,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       OutputLog();
     }
   }
-  /* USER CODE END Callback 1 */
 }
 
 /* USER CODE END 0 */

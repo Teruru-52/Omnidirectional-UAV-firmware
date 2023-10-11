@@ -33,6 +33,7 @@ const float rps_max = 248.333f;
 const float start_threshold_edge = 0.1;
 const float start_threshold_vertex = 0.05;
 bool start_flag = false;
+// const float err_threshold_edge = 0.05;
 const float err_threshold_edge = 0.1;
 const float err_threshold_vertex = 0.25;
 float coeff_tau_att, coeff_tau_omega, coeff_kappa_f;

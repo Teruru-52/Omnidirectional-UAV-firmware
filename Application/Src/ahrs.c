@@ -576,7 +576,8 @@ void Convertq2Euler(AHRS_State *ahrs)
 {
     // ZYX Euler
     ahrs->euler.x = atan2(2.0f * (ahrs->q.q0 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 - ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 + ahrs->q.q3 * ahrs->q.q3);
-    ahrs->euler.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 + ahrs->q.q1 * ahrs->q.q3));
+    // ahrs->euler.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 + ahrs->q.q1 * ahrs->q.q3));
+    ahrs->euler.y = asin(2.0f * (ahrs->q.q0 * ahrs->q.q2 - ahrs->q.q1 * ahrs->q.q3));
     ahrs->euler.z = -atan2(2.0f * (ahrs->q.q1 * ahrs->q.q2 - ahrs->q.q0 * ahrs->q.q3), ahrs->q.q0 * ahrs->q.q0 + ahrs->q.q1 * ahrs->q.q1 - ahrs->q.q2 * ahrs->q.q2 - ahrs->q.q3 * ahrs->q.q3);
 
     // XYZ Euler
