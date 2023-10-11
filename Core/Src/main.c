@@ -107,11 +107,15 @@ void OutputLog()
   // printf("%.3f\r\n", gyro.x);
   // printf("%.3f, %.3f, %.3f\n", mag.x, mag.y, mag.z);
   // printf("%.3f\t%.3f\t%.3f\t%.3f\t\r\n", ahrs.q.q0, ahrs.q.q1, ahrs.q.q2, ahrs.q.q3);
+
+  // printf("pressure = %f\n", pressure);
+  // printf("battery = %f\n", bat_vol);
+
   // printf("%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t\r\n", motor_input.voltage[0], motor_input.voltage[1], motor_input.voltage[2], motor_input.voltage[3],
   //        motor_input.voltage[4], motor_input.voltage[5], motor_input.voltage[6], motor_input.voltage[7]);
   // printf("%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t\r\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
-  // printf("pressure = %f\n", pressure);
-  // printf("battery = %f\n", bat_vol);
+  // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
+  //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
 
   // printf("invert mode = %d\n", inverted_mode);
 

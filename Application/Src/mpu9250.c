@@ -208,7 +208,7 @@ void CalcAccOffset(AxesRaw *acc)
     ay_offset = acc_offset_sum.y / (float)(max_cali_count);
     az_offset = acc_offset_sum.z / (float)(max_cali_count) + 1.0f;
     // az_offset = acc_offset_sum.z / (float)(max_cali_count) + 1.06f;
-    printf("acc offset = %f,\t%f,\t%f\t\r\n", ax_offset, ay_offset, az_offset);
+    printf("acc offset = %f, %f, %f\r\n", ax_offset, ay_offset, az_offset);
 }
 
 void CalcGyroOffset(AxesRaw *gyro)

@@ -150,9 +150,9 @@ void InitializeAHRS(AHRS_State *ahrs)
 void UpdateAHRS(AxesRaw *acc, AxesRaw *gyro, AxesRaw *mag, AHRS_State *ahrs)
 {
     // UpdateMadgwickFilter(acc, gyro, mag, ahrs);
-    // UpdateMadgwickFilterIMU(acc, gyro, ahrs);
+    UpdateMadgwickFilterIMU(acc, gyro, ahrs);
     // UpdateEKF(acc, gyro, mag, ahrs);
-    UpdateKF(acc, gyro, ahrs);
+    // UpdateKF(acc, gyro, ahrs);
     // UpdateComplimentaryFilter(acc, gyro, mag, ahrs);
 }
 

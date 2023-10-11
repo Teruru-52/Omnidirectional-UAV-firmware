@@ -29,7 +29,8 @@ const float kappa_f = 8e-7f;
 // const float kappa_f = 1e-6f;
 const float param_rps2voltage[5] = {2.1967e-09, -1.1731e-6, 2.3771e-04, -0.0136, 0.5331};
 const float rps_max = 248.333f;
-const float start_threshold_edge = 0.01;
+// const float start_threshold_edge = 0.01;
+const float start_threshold_edge = 0.1;
 const float start_threshold_vertex = 0.05;
 bool start_flag = false;
 const float err_threshold_edge = 0.1;
@@ -143,11 +144,11 @@ void InitializeController()
 {
     // const float angle_offset = -M_PI / 37.5f;
     // const float angle_offset = -M_PI / 42.0f;
-    // const float angle_offset = -M_PI / 180.0f;
-    // const float angle_offset = 0.045;
+    const float angle_offset = -M_PI / 180.0f;
+    // const float angle_offset = 0.0;
 
     // inverted at the edge
-    theta_des_edge = -M_PI / 4.0f;
+    theta_des_edge = -M_PI / 4.0f + angle_offset;
     phi_des_edge = 0;
     q_des_edge.q0 = cos(theta_des_edge / 2.0f);
     q_des_edge.q1 = 0.0f;
@@ -312,7 +313,7 @@ void load_default_data(void)
     params.tau[1] = 0;
     params.tau[2] = 0;
     /* Make this a diagonal PSD matrix, even though it's not diagonal. */
-    params.Q[0] = 0.0;
+    params.Q[0] = 1.0;
     params.Q[3] = 0;
     params.Q[6] = 0;
     params.Q[1] = 0;
@@ -320,7 +321,7 @@ void load_default_data(void)
     params.Q[7] = 0;
     params.Q[2] = 0;
     params.Q[5] = 0;
-    params.Q[8] = 0.0;
+    params.Q[8] = 1.0;
     params.fmin[0] = 0.0;
     params.fmax[0] = 0.049;
     // params.fmax[0] = 0.06 * 9.81;
@@ -397,36 +398,25 @@ void UpdateQuaternionControl(AHRS_State *ahrs, MotorInput *motor_input, float ba
         // params.u[5] = coeff_Tdes[2];
         solve();
         for (int i = 0; i < MOTOR_NUM; i++)
-        {
             coeff_Fprop[i] = vars.x[i];
-        }
         // printf("objv = %10.3e\n", work.optval);
-
-        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
-        //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
-
         // arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
-        //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
-
         CalcMotorInput(motor_input, bat_vol);
-        // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->duty[0], motor_input->duty[1], motor_input->duty[2], motor_input->duty[3],
-        //        motor_input->duty[4], motor_input->duty[5], motor_input->duty[6], motor_input->duty[7]);
     }
     else
     {
         Write_GPIO(USER_LED2, 0);
         for (int i = 0; i < MOTOR_NUM; i++)
-        {
             motor_input->duty[i] = 0;
-        }
+        for (int i = 0; i < 3; i++)
+            coeff_Tdes[i] = 0;
     }
 }
 
 void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
 {
     float errorNorm = 0;
-    float start_threshold, err_threshold;
+    float start_threshold = 0, err_threshold = 0;
     AxesRaw error_angle = {0, 0, 0};
 
     if (inverted_mode == 0)
@@ -438,15 +428,13 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
         start_threshold = start_threshold_edge;
         err_threshold = err_threshold_edge;
     }
-    else
-    // if (inverted_mode == 1)
+    else if (inverted_mode == 1)
     {
         theta_des = theta_des_vertex;
         phi_des = phi_des_vertex;
         error_angle.x = phi_des - ahrs->euler.x;
         error_angle.y = theta_des - ahrs->euler.y;
         errorNorm = Sqrt(error_angle.x * error_angle.x + error_angle.y * error_angle.y);
-        // errorNorm = Sqrt(error_angle.x * error_angle.x);
         start_threshold = start_threshold_vertex;
         err_threshold = err_threshold_vertex;
     }
@@ -470,25 +458,12 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
             // params.u[3] = coeff_Tdes[0];
             // params.u[4] = coeff_Tdes[1];
             // params.u[5] = coeff_Tdes[2];
-
             solve();
             for (int i = 0; i < MOTOR_NUM; i++)
-            {
                 coeff_Fprop[i] = vars.x[i];
-            }
-
             // printf("objv = %10.3e\n", work.optval);
-
-            // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", coeff_Tdes[0], coeff_Tdes[1], coeff_Tdes[2],
-            //        coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3], coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7], work.optval);
-
             // arm_mat_mult_f32(&mat_pinvM, &mat_Tdes, &mat_Fprop);
-            // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", coeff_Fprop[0], coeff_Fprop[1], coeff_Fprop[2], coeff_Fprop[3],
-            //        coeff_Fprop[4], coeff_Fprop[5], coeff_Fprop[6], coeff_Fprop[7]);
-
             CalcMotorInput(motor_input, bat_vol);
-            // printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", motor_input->duty[0], motor_input->duty[1], motor_input->duty[2], motor_input->duty[3],
-            //        motor_input->duty[4], motor_input->duty[5], motor_input->duty[6], motor_input->duty[7]);
         }
         else
         {
@@ -607,8 +582,7 @@ void CalcMotorInput(MotorInput *motor_input, float bat_vol)
     // calculate input velocity
     CalcInputVelocity(motor_input);
 
-    // feed-foward control
-    // calculate input voltage
+    // calculate input voltage (feed-foward control)
     CalcInputVoltage(motor_input);
 
     // calculate input duty
@@ -619,17 +593,11 @@ void CalcInputVelocity(MotorInput *motor_input)
 {
     for (int i = 0; i < MOTOR_NUM; i++)
     {
-        coeff_Fprop[i] = coeff_Tdes[1] * coeff_pinvMy[i];
-        // coeff_Fprop[3] = coeff_Tdes[1] * coeff_pinvMy[3];
-        // coeff_Fprop[4] = coeff_Tdes[1] * coeff_pinvMy[4];
+        // coeff_Fprop[i] = coeff_Tdes[1] * coeff_pinvMy[i];
         if (coeff_Fprop[i] < 0)
-        {
             motor_input->velocity[i] = 0.0;
-        }
         else
-        {
             motor_input->velocity[i] = Sqrt(coeff_kappa_f * coeff_Fprop[i]);
-        }
     }
 }
 
@@ -638,9 +606,7 @@ void CalcInputVoltage(MotorInput *motor_input)
     for (int i = 0; i < MOTOR_NUM; i++)
     {
         if (motor_input->velocity[i] < 0)
-        {
             motor_input->voltage[i] = 0.0;
-        }
         else
         {
             float rps = motor_input->velocity[i];
@@ -653,7 +619,5 @@ void CalcInputVoltage(MotorInput *motor_input)
 void Voltage2Duty(MotorInput *motor_input, float bat_vol)
 {
     for (int i = 0; i < MOTOR_NUM; i++)
-    {
         motor_input->duty[i] = (float)(MOTOR_MAX_PWM_VALUE)*motor_input->voltage[i] / (bat_vol);
-    }
 }
