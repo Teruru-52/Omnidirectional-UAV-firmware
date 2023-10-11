@@ -536,7 +536,7 @@ void CalcInputTorqueEuler(AHRS_State *ahrs, AxesRaw *error_angle)
         // float kp = 2.3f;
         // float ki = 0.0f;
         // float kd = 0.4f;
-        float kp = 3.0f;
+        float kp = 2.4f;
         float ki = 0.0f;
         float kd = 0.5f;
         float err_sum_max = 0.1;
