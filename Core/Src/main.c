@@ -101,6 +101,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     if (bat_vol > bat_vol_lim)
     {
+      Write_GPIO(USER_LED4, 1);
       DriveMotor(&motor1, &motor2, &motor3, &motor4,
                  &motor5, &motor6, &motor7, &motor8, &motor_input);
     }
@@ -200,6 +201,7 @@ int main(void)
   MX_SPI3_Init();
   MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
+  Write_GPIO(USER_LED1, 1);
   Motor_TIM_Init();
   Speaker_TIM_Init();
 
@@ -213,8 +215,10 @@ int main(void)
   SetInitialMag(&mag);
   InitializeAHRS(&ahrs);
   InitializeController();
-  TestMotor(&motor1, &motor2, &motor3, &motor4, &motor5, &motor6, &motor7, &motor8);
   Write_GPIO(USER_LED2, 0);
+  Write_GPIO(USER_LED3, 1);
+  TestMotor(&motor1, &motor2, &motor3, &motor4, &motor5, &motor6, &motor7, &motor8);
+  Write_GPIO(USER_LED3, 0);
 
   // float duty = 200;
   // TestMatrix();
@@ -225,7 +229,6 @@ int main(void)
   // }
 
   Base_TIM_Init();
-  Write_GPIO(USER_LED1, 1);
 
   HAL_UART_Receive_DMA(&huart1, RdBuff, RCV_BUFF_SIZE);
 

@@ -361,7 +361,7 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float *bat_vo
         Write_GPIO(USER_LED2, 1);
 
         // edge
-        float kp = 2.2;
+        float kp = 2.24;
         // float ki = 0.001f;
         float ki = 0;
         float kd = 0.5;

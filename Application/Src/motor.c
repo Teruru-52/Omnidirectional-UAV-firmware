@@ -36,8 +36,8 @@ void BrakeMotor(Motor *motor1, Motor *motor2, Motor *motor3, Motor *motor4,
 void TestMotor(Motor *motor1, Motor *motor2, Motor *motor3, Motor *motor4,
                Motor *motor5, Motor *motor6, Motor *motor7, Motor *motor8)
 {
-    float duty = 50;
-    int dt = 200;
+    float duty = 150;
+    int dt = 100;
     PWM_Update(motor1, duty);
     HAL_Delay(dt);
     PWM_Stop(motor1);
