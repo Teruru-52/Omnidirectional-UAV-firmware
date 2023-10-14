@@ -25,12 +25,13 @@ AxesRaw omega_des;
 const float J = 0.0017f;
 const float tau_att = 0.1f;
 const float tau_omega = 0.1f;
-const float kappa_f = 8e-7f;
+// const float kappa_f = 8e-7f;
+const float kappa_f = 9e-7f;
 // const float kappa_f = 1e-6f;
 const float param_rps2voltage[5] = {2.1967e-09, -1.1731e-6, 2.3771e-04, -0.0136, 0.5331};
 const float rps_max = 248.333f;
-// const float start_threshold_edge = 0.01;
-const float start_threshold_edge = 0.1;
+const float start_threshold_edge = 0.01;
+// const float start_threshold_edge = 0.1;
 const float start_threshold_vertex = 0.05;
 bool start_flag = false;
 // const float err_threshold_edge = 0.05;
@@ -145,8 +146,8 @@ void InitializeController()
 {
     // const float angle_offset = -M_PI / 37.5f;
     // const float angle_offset = -M_PI / 42.0f;
-    const float angle_offset = -M_PI / 180.0f;
-    // const float angle_offset = 0.0;
+    // const float angle_offset = -M_PI / 180.0f;
+    const float angle_offset = 0.0;
 
     // inverted at the edge
     theta_des_edge = -M_PI / 4.0f + angle_offset;
@@ -536,22 +537,23 @@ void CalcInputTorqueEuler(AHRS_State *ahrs, AxesRaw *error_angle)
         // float kp = 2.3f;
         // float ki = 0.0f;
         // float kd = 0.4f;
-        float kp = 2.4f;
-        float ki = 0.0f;
-        float kd = 0.5f;
-        float err_sum_max = 0.1;
 
-        err_pitch_sum += error_angle->y * dt;
-        if (err_pitch_sum > err_sum_max)
-            err_pitch_sum = err_sum_max;
-        else if (err_pitch_sum < -err_sum_max)
-            err_pitch_sum = -err_sum_max;
+        // float kp = 2.4f;
+        // float ki = 0.0f;
+        // float kd = 0.5f;
+        // float err_sum_max = 0.1;
 
-        coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
+        // err_pitch_sum += error_angle->y * dt;
+        // if (err_pitch_sum > err_sum_max)
+        //     err_pitch_sum = err_sum_max;
+        // else if (err_pitch_sum < -err_sum_max)
+        //     err_pitch_sum = -err_sum_max;
+
+        // coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
 
         /*LQR*/
-        // float coeff_x[2] = {-error_angle->y, ahrs->gy};
-        // coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
+        float coeff_x[2] = {-error_angle->y, ahrs->gy};
+        coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
     }
     else if (inverted_mode == 1)
     {
