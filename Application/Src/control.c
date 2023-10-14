@@ -26,11 +26,17 @@ const float J = 0.0017f;
 const float tau_att = 0.1f;
 const float tau_omega = 0.1f;
 // const float kappa_f = 8e-7f;
-const float kappa_f = 9e-7f;
+// const float kappa_f = 7e-7f;
 // const float kappa_f = 1e-6f;
+// const float kappa_f = 1e-5f;
+// const float kappa_f = 1.5e-5f;
+// const float kappa_f = 2e-5f;
+
+const float kappa_f = 9.7e-6f; // fmax = 0.8[N]
 const float param_rps2voltage[5] = {2.1967e-09, -1.1731e-6, 2.3771e-04, -0.0136, 0.5331};
 const float rps_max = 248.333f;
 const float start_threshold_edge = 0.01;
+// const float start_threshold_edge = 0.05;
 // const float start_threshold_edge = 0.1;
 const float start_threshold_vertex = 0.05;
 bool start_flag = false;
@@ -96,13 +102,13 @@ const float32_t coeff_pinvMy[8] = {
 // const float32_t coeff_K_edge[2] = {-0.8300, -0.2167};
 
 // Q = diag([250, 10]), R = 2.5
-// const float32_t coeff_K_edge[2] = {-1.6061, -0.1870};
+const float32_t coeff_K_edge[2] = {-1.6061, -0.1870};
 
 // Q = diag([250, 10]), R = 1
 // const float32_t coeff_K_edge[2] = {-0.9380, -0.2170};
 
 // Q = diag([350, 10]), R = 1
-const float32_t coeff_K_edge[2] = {-1.1239, -0.2176};
+// const float32_t coeff_K_edge[2] = {-1.1239, -0.2176};
 
 // Q = diag([400, 10]), R = 1
 // const float32_t coeff_K_edge[2] = {-1.2063, -0.2178};
@@ -315,7 +321,7 @@ void load_default_data(void)
     params.tau[1] = 0;
     params.tau[2] = 0;
     /* Make this a diagonal PSD matrix, even though it's not diagonal. */
-    params.Q[0] = 1.0;
+    params.Q[0] = 0.0;
     params.Q[3] = 0;
     params.Q[6] = 0;
     params.Q[1] = 0;
@@ -323,12 +329,11 @@ void load_default_data(void)
     params.Q[7] = 0;
     params.Q[2] = 0;
     params.Q[5] = 0;
-    params.Q[8] = 1.0;
+    params.Q[8] = 0.0;
     params.fmin[0] = 0.0;
-    params.fmax[0] = 0.049;
-    // params.fmax[0] = 0.06 * 9.81;
-    // params.fmax[0] = 0.1 * 9.81;
-    // params.fmax[0] = kappa_f * rps_max * rps_max;
+    // params.fmax[0] = 0.049;
+    // params.fmax[0] = 0.8;
+    params.fmax[0] = kappa_f * rps_max * rps_max;
 }
 
 void UpdateControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol)
@@ -432,13 +437,13 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
     }
     else if (inverted_mode == 1)
     {
-        theta_des = theta_des_vertex;
-        phi_des = phi_des_vertex;
-        error_angle.x = phi_des - ahrs->euler.x;
-        error_angle.y = theta_des - ahrs->euler.y;
-        errorNorm = Sqrt(error_angle.x * error_angle.x + error_angle.y * error_angle.y);
-        start_threshold = start_threshold_vertex;
-        err_threshold = err_threshold_vertex;
+        // theta_des = theta_des_vertex;
+        // phi_des = phi_des_vertex;
+        // error_angle.x = phi_des - ahrs->euler.x;
+        // error_angle.y = theta_des - ahrs->euler.y;
+        // errorNorm = Sqrt(error_angle.x * error_angle.x + error_angle.y * error_angle.y);
+        // start_threshold = start_threshold_vertex;
+        // err_threshold = err_threshold_vertex;
     }
 
     if (errorNorm < start_threshold)
@@ -471,7 +476,11 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
         {
             Write_GPIO(USER_LED2, 0);
             for (int i = 0; i < MOTOR_NUM; i++)
+            {
+                motor_input->velocity[i] = 0;
+                motor_input->voltage[i] = 0;
                 motor_input->duty[i] = 0;
+            }
             for (int i = 0; i < 3; i++)
                 coeff_Tdes[i] = 0;
 
@@ -483,7 +492,13 @@ void UpdateEulerControl(AHRS_State *ahrs, MotorInput *motor_input, float bat_vol
     else
     {
         for (int i = 0; i < MOTOR_NUM; i++)
+        {
+            motor_input->velocity[i] = 0;
+            motor_input->voltage[i] = 0;
             motor_input->duty[i] = 0;
+        }
+        for (int i = 0; i < 3; i++)
+            coeff_Tdes[i] = 0;
     }
 }
 
@@ -538,22 +553,22 @@ void CalcInputTorqueEuler(AHRS_State *ahrs, AxesRaw *error_angle)
         // float ki = 0.0f;
         // float kd = 0.4f;
 
-        // float kp = 2.4f;
-        // float ki = 0.0f;
-        // float kd = 0.5f;
-        // float err_sum_max = 0.1;
+        float kp = 20.0f;
+        float ki = 0.8f;
+        float kd = 1.2f;
+        float err_sum_max = 0.02;
 
-        // err_pitch_sum += error_angle->y * dt;
-        // if (err_pitch_sum > err_sum_max)
-        //     err_pitch_sum = err_sum_max;
-        // else if (err_pitch_sum < -err_sum_max)
-        //     err_pitch_sum = -err_sum_max;
+        err_pitch_sum += error_angle->y * dt;
+        if (err_pitch_sum > err_sum_max)
+            err_pitch_sum = err_sum_max;
+        else if (err_pitch_sum < -err_sum_max)
+            err_pitch_sum = -err_sum_max;
 
-        // coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
+        coeff_Tdes[1] = kp * error_angle->y + ki * err_pitch_sum + kd * (-ahrs->gy);
 
         /*LQR*/
-        float coeff_x[2] = {-error_angle->y, ahrs->gy};
-        coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
+        // float coeff_x[2] = {-error_angle->y, ahrs->gy};
+        // coeff_Tdes[1] = coeff_K_edge[0] * coeff_x[0] + coeff_K_edge[1] * coeff_x[1];
     }
     else if (inverted_mode == 1)
     {
@@ -574,9 +589,9 @@ void CalcInputTorqueEuler(AHRS_State *ahrs, AxesRaw *error_angle)
         // arm_mat_init_f32(&mat_x, 6, 1, coeff_x);
         // arm_mat_mult_f32(&mat_K_vertex, &mat_x, &mat_Tdes);
 
-        float coeff_x[5] = {-error_angle->x, -error_angle->y, ahrs->gx, ahrs->gy, ahrs->gz};
-        arm_mat_init_f32(&mat_x, 5, 1, coeff_x);
-        arm_mat_mult_f32(&mat_K_vertex, &mat_x, &mat_Tdes);
+        // float coeff_x[5] = {-error_angle->x, -error_angle->y, ahrs->gx, ahrs->gy, ahrs->gz};
+        // arm_mat_init_f32(&mat_x, 5, 1, coeff_x);
+        // arm_mat_mult_f32(&mat_K_vertex, &mat_x, &mat_Tdes);
     }
 }
 

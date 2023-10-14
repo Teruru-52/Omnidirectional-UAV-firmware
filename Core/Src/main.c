@@ -268,16 +268,17 @@ int main(void)
     }
     else
     {
-      if (inverted_mode == 0)
-      {
-        inverted_mode = 1;
-        Write_GPIO(USER_LED3, 1);
-      }
-      else if (inverted_mode == 1)
-      {
-        inverted_mode = 0;
-        Write_GPIO(USER_LED3, 0);
-      }
+      inverted_mode = 0;
+      // if (inverted_mode == 0)
+      // {
+      //   inverted_mode = 1;
+      //   Write_GPIO(USER_LED3, 1);
+      // }
+      // else if (inverted_mode == 1)
+      // {
+      //   inverted_mode = 0;
+      //   Write_GPIO(USER_LED3, 0);
+      // }
 
       // float duty = 200;
       // HAL_Delay(2000);
