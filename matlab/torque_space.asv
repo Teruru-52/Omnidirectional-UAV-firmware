@@ -12,9 +12,8 @@ for i=2:N
     input = [repmat(input, 2, 1), add];
 end
 
-fmax = 0.8;
-% fmax = 0.6;
-% fmax = 0.5;
+% fmax = 0.06;
+fmax = 0.05;
 % fmax = 1;
 input = input * fmax
 
@@ -45,9 +44,9 @@ global vertex
 trisurf(k1,vertex(1,:),vertex(2,:),vertex(3,:),'FaceColor','cyan','FaceAlpha',0.1,'EdgeAlpha',0.4,'DisplayName','Torque set');
 grid on;
 daspect([1 1 1]);
-xlim([-0.2 0.2]);
-ylim([-0.2 0.2]);
-zlim([-0.2 0.2]);
+xlim([-0.25 0.25]);
+ylim([-0.25 0.25]);
+zlim([-0.25 0.25]);
 xlabel('$\tau_x$ [Nm]', 'Interpreter', 'latex');
 ylabel('$\tau_y$ [Nm]', 'Interpreter', 'latex');
 zlabel('$\tau_z$ [Nm]', 'Interpreter', 'latex');
